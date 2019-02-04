@@ -91,8 +91,11 @@ class LSTMClassifier(nn.Module):
 
                 # backprop
                 optimizer.zero_grad()  # reset tensor gradients
-                loss.backward(retain_graph = True)  # compute gradients for network params w.r.t loss
+                loss.backward()  # compute gradients for network params w.r.t loss
                 optimizer.step()  # perform the gradient update step
+
+                self.hidden[0].detach_()
+                self.hidden[1].detach_()
 
                 # print statistics
                 running_loss += loss.item()
