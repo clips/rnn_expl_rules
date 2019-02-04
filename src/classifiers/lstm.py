@@ -18,11 +18,13 @@ class LSTMClassifier(nn.Module):
         self.device = device
 
         #@todo: initialize from pretrained embeddings
-        self.word_embeddings = nn.Embedding(vocab_size, embedding_dim) #embedding layer, initialized at random
+        self.word_embeddings = nn.Embedding(vocab_size, embedding_dim).to(self.device) #embedding layer, initialized at random
 
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers=self.n_lstm_layers, dropout=dropout) #lstm layers
         self.hidden2label = nn.Linear(hidden_dim, label_size) #hidden to output layer
         self.hidden = self.init_hidden() #initialize cell states
+
+        self.to(self.device)
 
     def init_hidden(self):
         '''
