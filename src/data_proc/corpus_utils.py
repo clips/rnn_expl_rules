@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 
 import torch
 from os.path import realpath, join
-# from random import shuffle
+import json
 
 #beginning of seq, end of seq, beg of line, end of line, unknown, padding symbol
 BOS, EOS, BOL, EOL, UNK, PAD = '<s>', '</s>', '<bol>', '</bol>', '<unk>', '<pad>'
@@ -46,6 +46,20 @@ class Vocab:
     def size(self):
         return len(self.word2idx)
 
+    def to_dict(self):
+        return {"reserved": self.reserved_sym,
+                'word2idx': [{"key": key, "val": val} for key, val in self.word2idx.items()]}
+
+    @classmethod
+    def from_dict(cls, d):
+        inst = cls()
+        inst.word2idx = {d["key"]: d["val"] for d in d['word2idx']} #the paramter "d" here is the return value of to_dict function earlier.
+        for key, val in d['reserved'].items():
+            setattr(inst, key, inst.word2idx[val])
+        inst.i2w = {val: key for key, val in inst.word2idx.items()}
+
+        return inst
+
 def dummy_processor(line):
     return line.strip().split()
 
@@ -68,13 +82,6 @@ class Corpus:
         self.text_processor = text_processor
 
     def __iter__(self):
-        # if is_shuffle:
-        #     combined = list(zip(self.fname_subset, self.labels))
-        #     shuffle(combined)
-        #     cur_split, cur_labels = zip(*combined)
-        # else:
-        #     cur_split, cur_labels = self.fname_subset, self.labels
-
         for cur_fname, cur_label in zip(self.fname_subset, self.labels):
             with open(realpath(join(self.dir_in, cur_fname + '.txt'))) as f:
                 word_seq = list()
@@ -98,13 +105,11 @@ class CorpusEncoder:
                         vocab_set.add(word)
 
         # create vocabs
+        #@todo: add min and max freq to vocab items
         vocab = Vocab.populate_indices(vocab_set, bos=BOS, eos=EOS, bol=BOL, eol=EOL, unk=UNK, pad=PAD)
         return cls(vocab)
 
     def encode_inst(self, inst):
-        # inst = self.transform(inst)
-        # encoded_inst = [self.vocab.get(i) for i in inst] #@todo: redundant because transform_item already replaces with idx. confirm.
-        # return encoded_inst
         '''
         Converts sentence to sequence of indices after adding beginning, end and replacing unk tokens.
         @todo: check if beg and end of seq and line are required for our classification setup.
@@ -115,9 +120,6 @@ class CorpusEncoder:
         if self.vocab.eos is not None:
             out = out + [self.vocab.eos]
         return out
-
-    # def transform(self, inst):
-
 
     def transform_item(self, item):
         '''
@@ -169,6 +171,18 @@ class CorpusEncoder:
 
         return t, labels, lengths
 
+    def to_json(self, fname, dir_out):
+        with open(realpath(join(dir_out, fname)), 'w') as f:
+            json.dump({'vocab': self.vocab.to_dict()}, f)
+
+    @classmethod
+    def from_json(cls, fname, dir_out):
+        with open(realpath(join(dir_out, fname))) as f:
+            obj = json.load(f)
+
+        vocab = Vocab.from_dict(obj['vocab'])
+
+        return cls(vocab)
 
 class DataUtils:
 
