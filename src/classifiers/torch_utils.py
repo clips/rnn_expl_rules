@@ -28,7 +28,7 @@ class TorchUtils:
             makedirs(dir_encoder)
 
         # serialize encoder
-        corpus_encoder.to_json(dir_encoder, fname_encoder)
+        corpus_encoder.to_json(fname_encoder, dir_encoder)
 
         #serialize model state
         torch.save(state, realpath(join(dir_state, fname_state)))
@@ -47,7 +47,7 @@ class TorchUtils:
             raise FileNotFoundError("Encoder not found")
 
         # load encoder
-        corpus_encoder = CorpusEncoder.from_json(dir_state, fname_encoder)
+        corpus_encoder = CorpusEncoder.from_json(fname_encoder, dir_state)
 
         #load model state
         state = torch.load(realpath(join(dir_state, fname_state)))
