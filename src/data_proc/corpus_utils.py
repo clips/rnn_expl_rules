@@ -6,6 +6,7 @@ from sklearn.model_selection import train_test_split
 import torch
 from os.path import realpath, join
 import json
+from nltk.util import skipgrams
 
 #beginning of seq, end of seq, beg of line, end of line, unknown, padding symbol
 BOS, EOS, BOL, EOL, UNK, PAD = '<s>', '</s>', '<bol>', '</bol>', '<unk>', '<pad>'
@@ -36,6 +37,7 @@ class Vocab:
 
         return inst
 
+
     def __getitem__(self, item):
         return self.word2idx[item]
 
@@ -56,7 +58,7 @@ class Vocab:
         inst.word2idx = {d["key"]: d["val"] for d in d['word2idx']} #the paramter "d" here is the return value of to_dict function earlier.
         for key, val in d['reserved'].items():
             setattr(inst, key, inst.word2idx[val])
-        inst.i2w = {val: key for key, val in inst.word2idx.items()}
+        inst.idx2word = {val: key for key, val in inst.word2idx.items()}
 
         return inst
 
@@ -89,24 +91,34 @@ class Corpus:
                     word_seq.extend(self.text_processor(line))
                 yield (word_seq, cur_label)
 
+
+
 class CorpusEncoder:
 
-    def __init__(self, vocab):
+    def __init__(self, vocab):#, skipgrams):
         self.vocab = vocab
+        # self.sg = skipgrams
 
     @classmethod
     def from_corpus(cls, *corpora):
         # create vocab set for initializing Vocab class
         vocab_set = set()
+        # sg_set = set()
+
         for corpus in corpora:
             for (words, labels) in corpus:
+                # sg_set.add(skipgrams(words, n = 3, k = 1))
                 for word in words:
                     if not word in vocab_set:
                         vocab_set.add(word)
 
+
         # create vocabs
         #@todo: add min and max freq to vocab items
         vocab = Vocab.populate_indices(vocab_set, bos=BOS, eos=EOS, bol=BOL, eol=EOL, unk=UNK, pad=PAD)
+        # sg = Vocab.populate_indices(sg_set)
+
+        # return cls(vocab, sg)
         return cls(vocab)
 
     def encode_inst(self, inst):
@@ -166,7 +178,7 @@ class CorpusEncoder:
 
         #contiguous() makes a copy of tensor so the order of elements would be same as if created from scratch.
         t = t.t().contiguous().to(device)
-        lengths = torch.tensor(lengths).to(device)
+        lengths = torch.tensor(lengths, dtype = torch.int).to(device)
         labels = torch.LongTensor(cur_labels).to(device)
 
         return t, labels, lengths
