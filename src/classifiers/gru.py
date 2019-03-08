@@ -1,5 +1,5 @@
-from src.torch_utils import TorchUtils
 from src.torch_utils import EmbeddingMul
+from src.torch_utils import TorchUtils
 from src.explanations.grads import Explanation
 from src.explanations.eval import InterpretabilityEval
 
@@ -9,13 +9,13 @@ import torch.nn.functional as F
 
 from random import shuffle
 
-class LSTMClassifier(nn.Module):
+class GRUClassifier(nn.Module):
 
     def __init__(self, n_layers, hidden_dim, vocab_size, padding_idx, embedding_dim, dropout, label_size, batch_size):
 
-        super(LSTMClassifier, self).__init__()
+        super(GRUClassifier, self).__init__()
 
-        self.n_lstm_layers = n_layers
+        self.n_gru_layers = n_layers
         self.hidden_dim = hidden_dim
         self.vocab_size = vocab_size
         self.emb_dim = embedding_dim
@@ -29,10 +29,10 @@ class LSTMClassifier(nn.Module):
             self.device = torch.device('cpu')
 
         #@todo: initialize from pretrained embeddings
-        # self.word_embeddings = nn.Embedding(self.vocab_size, self.emb_dim, padding_idx=padding_idx).to(self.device) #embedding layer, initialized at random
+        # self.word_embeddings = nn.Embedding(self.vocab_size, self.emb_dim, padding_idx = padding_idx).to(self.device) #embedding layer, initialized at random
         self.word_embeddings = EmbeddingMul(self.vocab_size, self.emb_dim, padding_idx=padding_idx) #embedding layer, initialized at random
 
-        self.lstm = nn.LSTM(self.emb_dim, self.hidden_dim, num_layers=self.n_lstm_layers, dropout=self.dropout) #lstm layers
+        self.lstm = nn.GRU(self.emb_dim, self.hidden_dim, num_layers=self.n_gru_layers, dropout=self.dropout) #lstm layers
 
         self.hidden2label = nn.Linear(self.hidden_dim, self.n_labels) #hidden to output layer
         self.hidden = self.init_hidden() #initialize cell states
@@ -43,14 +43,11 @@ class LSTMClassifier(nn.Module):
         '''
         initializes hidden and cell states to zero for the first input
         '''
-        h0 = torch.zeros(self.n_lstm_layers, self.batch_size, self.hidden_dim).to(self.device)
-        c0 = torch.zeros(self.n_lstm_layers, self.batch_size, self.hidden_dim).to(self.device)
-
-        return (h0, c0)
+        h0 = torch.zeros(self.n_gru_layers, self.batch_size, self.hidden_dim).to(self.device)
+        return h0
 
     def detach_hidden_(self):
-        self.hidden[0].detach_()
-        self.hidden[1].detach_()
+        self.hidden.detach_()
 
     def forward(self, sentence, sent_lengths):
 
@@ -60,7 +57,7 @@ class LSTMClassifier(nn.Module):
 
         # truncating the batch length if last batch has fewer elements
         cur_batch_len = len(sent_lengths)
-        self.hidden = (self.hidden[0][:, :cur_batch_len, :], self.hidden[1][:, :cur_batch_len, :])
+        self.hidden = self.hidden[:, :cur_batch_len, :]
 
         # view reshapes the data to the given dimensions. -1: infer from the rest. We want (seq_len * batch_size * input_size)
         # embs = embeds.view(sentence.shape[0], sentence.shape[1], -1)
@@ -77,11 +74,11 @@ class LSTMClassifier(nn.Module):
 
         #unsort batch
         lstm_out = lstm_out[:, unsort]
-        self.hidden = (self.hidden[0][:, unsort, :], self.hidden[1][:, unsort, :])
+        self.hidden = self.hidden[:, unsort, :]
         # use the output of the last LSTM layer at the end of the last valid timestep to predict output
         # If sequence len is constant, using self.hidden[0] is the same as lstm_out[-1].
         # For variable len seq, use hidden[0] for the hidden state at last valid timestep. Do it for the last hidden layer
-        y = self.hidden2label(self.hidden[0][-1])
+        y = self.hidden2label(self.hidden[-1])
         y = F.log_softmax(y, dim=1)
 
         return y
@@ -155,9 +152,9 @@ class LSTMClassifier(nn.Module):
 
         return y_pred, y_true
 
-    def save(self, f_model = 'lstm_classifier.tar', dir_model = '../out/'):
+    def save(self, f_model = 'gru_classifier.tar', dir_model = '../out/'):
 
-        net_params = {'n_layers': self.n_lstm_layers,
+        net_params = {'n_layers': self.n_gru_layers,
                       'hidden_dim': self.hidden_dim,
                       'vocab_size': self.vocab_size,
                       'padding_idx': self.word_embeddings.padding_idx,
@@ -176,7 +173,7 @@ class LSTMClassifier(nn.Module):
         TorchUtils.save_model(state, f_model, dir_model)
 
     @classmethod
-    def load(cls, f_model = 'lstm_classifier.tar', dir_model = '../out/'):
+    def load(cls, f_model = 'gru_classifier.tar', dir_model = '../out/'):
 
         state = TorchUtils.load_model(f_model, dir_model)
         classifier = cls(**state['net_params'])
@@ -184,20 +181,25 @@ class LSTMClassifier(nn.Module):
 
         return classifier
 
+    def _set_eval(self):
+        '''
+        Switch off the training behaviour of the parameters
+        '''
+        for p in self.parameters():
+            p.train = False
 
     def get_importance(self, corpus, corpus_encoder):
         '''
         Compute word importance scores based on backpropagated gradients
         '''
-        explanation = Explanation.get_grad_importance(self, corpus, corpus_encoder, 'dot', 'lstm')
+        explanation = Explanation.get_grad_importance(self, corpus, corpus_encoder, 'max_mul', 'gru')
         eval_obj = InterpretabilityEval()
 
         eval_obj.avg_prec_recall_f1_at_k_from_corpus(explanation.imp_scores, corpus, corpus_encoder, k = 15)
 
 
-
 if __name__ == '__main__':
-    lstm = LSTMClassifier(2, 100, 50, 50, 0.5, 2, 2)
+    gru = GRUClassifier(2, 100, 50, 50, 0.5, 2, 2)
 
     #variable length sequences
     X0 = torch.LongTensor([1, 5, 8, 19, 43])
@@ -208,9 +210,9 @@ if __name__ == '__main__':
     # print(X_padded)
 
     #In case of error, change line in forward: embs = embeds.view(sentence.shape[1], sentence.shape[0], -1)
-    fwd_out = lstm.forward(X_padded, [7,5])
+    fwd_out = gru.forward(X_padded, [7, 5])
 
     labels = torch.LongTensor([[1,0],[0,1]])
 
-    loss = lstm.loss(fwd_out, labels)
+    loss = gru.loss(fwd_out, labels)
     print(loss)
