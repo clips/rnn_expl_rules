@@ -28,7 +28,6 @@ class GRUClassifier(nn.Module):
         else:
             self.device = torch.device('cpu')
 
-        #@todo: initialize from pretrained embeddings
         # self.word_embeddings = nn.Embedding(self.vocab_size, self.emb_dim, padding_idx = padding_idx).to(self.device) #embedding layer, initialized at random
         self.word_embeddings = EmbeddingMul(self.vocab_size, self.emb_dim, padding_idx=padding_idx) #embedding layer, initialized at random
 
