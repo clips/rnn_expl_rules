@@ -69,7 +69,7 @@ def encode_labels(fit_labels, transform_labels):
     le = LabelEncoder()
     le.fit(fit_labels)
     print("Label classes: ", list(le.classes_), "respectively mapped to ", le.transform(le.classes_))
-    return le.transform(transform_labels)
+    return le.transform(transform_labels), le
 
 class Corpus:
     def __init__(self, dir_corpus, f_labels, dir_labels, fname_subset, text_processor = dummy_processor, label_encoder = encode_labels):
@@ -79,7 +79,7 @@ class Corpus:
         all_labels = FileUtils.read_json(f_labels, dir_labels)
         self.labels = [all_labels[i] for i in self.fname_subset]
         all_labels = list(all_labels.values())
-        self.labels = label_encoder(all_labels, self.labels)
+        self.labels, self.label_encoder = label_encoder(all_labels, self.labels)
 
         self.text_processor = text_processor
 
@@ -188,14 +188,17 @@ class CorpusEncoder:
         return out
 
     def replace_unk(self, inst):
-        out = [self.vocab.unk if i not in self.vocab.word2idx else i for i in inst]
+        out = [self.vocab.idx2word[self.vocab.unk] if i not in self.vocab.word2idx else i for i in inst]
         return out
 
-    def get_decoded_sequences(self, corpus):
+    def get_decoded_sequences(self, corpus, strip_angular = False):
         instances = list()
 
         for (cur_inst, __) in iter(corpus):
             cur_inst = self.replace_unk(cur_inst)
+            if strip_angular:
+                #stripping angular brackets to support HTML rendering
+                cur_inst = [i.strip('<>') for i in cur_inst]
             instances.append(cur_inst)
 
         return instances
