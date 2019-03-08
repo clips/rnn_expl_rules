@@ -115,7 +115,7 @@ class CorpusEncoder:
 
         # create vocabs
         #@todo: add min and max freq to vocab items
-        vocab = Vocab.populate_indices(vocab_set, bos=BOS, eos=EOS, bol=BOL, eol=EOL, unk=UNK, pad=PAD)
+        vocab = Vocab.populate_indices(vocab_set, unk=UNK, pad=PAD)#bos=BOS, eos=EOS, bol=BOL, eol=EOL),
         # sg = Vocab.populate_indices(sg_set)
 
         # return cls(vocab, sg)
@@ -127,10 +127,10 @@ class CorpusEncoder:
         @todo: check if beg and end of seq and line are required for our classification setup.
         '''
         out = [self.transform_item(i) for i in inst]
-        if self.vocab.bos is not None:
-            out = [self.vocab.bos] + out
-        if self.vocab.eos is not None:
-            out = out + [self.vocab.eos]
+        # if self.vocab.bos is not None:
+        #     out = [self.vocab.bos] + out
+        # if self.vocab.eos is not None:
+        #     out = out + [self.vocab.eos]
         return out
 
     def transform_item(self, item):
@@ -182,6 +182,24 @@ class CorpusEncoder:
         labels = torch.LongTensor(cur_labels).to(device)
 
         return t, labels, lengths
+
+    def decode_inst(self, inst):
+        out = [self.vocab.idx2word[i] for i in inst if i != self.vocab.pad]
+        return out
+
+    def replace_unk(self, inst):
+        out = [self.vocab.unk if i not in self.vocab.word2idx else i for i in inst]
+        return out
+
+    def get_decoded_sequences(self, corpus):
+        instances = list()
+
+        for (cur_inst, __) in iter(corpus):
+            cur_inst = self.replace_unk(cur_inst)
+            instances.append(cur_inst)
+
+        return instances
+
 
     def to_json(self, fname, dir_out):
         with open(realpath(join(dir_out, fname)), 'w') as f:
