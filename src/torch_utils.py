@@ -1,7 +1,5 @@
 from __future__ import print_function
 
-from src.data_proc.corpus_utils import CorpusEncoder
-
 import torch.nn as nn
 import torch
 from torch.nn.parameter import Parameter
@@ -19,28 +17,21 @@ class TorchUtils:
         return sort, unsort
 
     @staticmethod
-    def save_model(corpus_encoder, state, fname_state, dir_state, dir_encoder, fname_encoder = 'corpus_encoder.json'):
+    def save_model(state, fname_state, dir_state):
         '''
         Save model state along with relevant architecture parameters as a state dictionary
-        :param corpus_encoder: encoder for corpus
         :param state: state dictionary with relevant details (e.g. network arch, epoch, model states and optimizer states)
         :param fname_state: out file name
-        :param dir_out: out directory
+        :param dir_state: out directory
         '''
         if not exists(dir_state):
             makedirs(dir_state)
-
-        if not exists(dir_encoder):
-            makedirs(dir_encoder)
-
-        # serialize encoder
-        corpus_encoder.to_json(fname_encoder, dir_encoder)
 
         #serialize model state
         torch.save(state, realpath(join(dir_state, fname_state)))
 
     @staticmethod
-    def load_model(fname_state, dir_state, dir_encoder, fname_encoder = 'corpus_encoder.json'):
+    def load_model(fname_state, dir_state):
         '''
         Load dictionary of model state and arch params
         :param fname_state: state file name to load
@@ -49,16 +40,18 @@ class TorchUtils:
         if not exists(realpath(join(dir_state, fname_state))):
             raise FileNotFoundError("Model not found")
 
-        if not exists(realpath(join(dir_encoder, fname_encoder))):
-            raise FileNotFoundError("Encoder not found")
-
-        # load encoder
-        corpus_encoder = CorpusEncoder.from_json(fname_encoder, dir_state)
-
         #load model state
         state = torch.load(realpath(join(dir_state, fname_state)))
 
-        return state, corpus_encoder
+        return state
+
+    @staticmethod
+    def _set_eval(model):
+        '''
+        Switch off the training behaviour of the parameters
+        '''
+        for p in model.parameters():
+            p.train = False
 
 class EmbeddingMul(nn.Module):
     """This class implements a custom embedding module which registers a hook to save gradients.
@@ -74,8 +67,8 @@ class EmbeddingMul(nn.Module):
         # Their values must be set to have no effects.
         # Checks if unsupported argument are used
         # ____________________________________________________________________
-        if padding_idx != None:
-            raise NotImplementedError("padding_idx must be None, not %s".format(padding_idx))
+        # if padding_idx != None:
+        #     raise NotImplementedError("padding_idx must be None, not %s".format(padding_idx))
         if max_norm is not None:
             raise NotImplementedError("max_norm must be None, not %s".format(max_norm))
         if scale_grad_by_freq:
@@ -88,6 +81,14 @@ class EmbeddingMul(nn.Module):
 
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
+
+        if padding_idx is not None:
+            if padding_idx > 0:
+                assert padding_idx < self.num_embeddings, 'Padding_idx must be within num_embeddings'
+            elif padding_idx < 0:
+                assert padding_idx >= -self.num_embeddings, 'Padding_idx must be within num_embeddings'
+                padding_idx = self.num_embeddings + padding_idx
+        self.padding_idx = padding_idx
 
         if _weight is None:
             self.weight = Parameter(torch.Tensor(num_embeddings, embedding_dim))
@@ -118,6 +119,8 @@ class EmbeddingMul(nn.Module):
 
     def reset_parameters(self):
         self.weight.data.normal_(0, 1)
+        if self.padding_idx is not None:
+            self.weight.data[self.padding_idx].fill_(0)
 
     def forward(self, input):
         """
@@ -127,7 +130,10 @@ class EmbeddingMul(nn.Module):
             - result: of shape (seq_len, batch_size, emb_dim_size)
         """
         #Wrapping as parameter is important to convert it as leaf node
+        # if not self.requires_emb_grad:
         embs = Parameter(self.to_embeddings(input).to(self.weight.device))
+        # else:
+        #     embs = Parameter(self.product_for_embedding(input).to(self.weight.device))
 
         if self.requires_emb_grad:
             # registers hook to track gradients of the embedded sequences
@@ -155,6 +161,27 @@ class EmbeddingMul(nn.Module):
 
         return result
 
+    # def product_for_embedding(self, input):
+    #     # The requires_grad parameter of result will mimic requires_grad parameter of self
+    #     self.last_oh = self.to_one_hot(input)
+    #
+    #     with torch.set_grad_enabled(self.requires_grad):
+    #         result = torch.stack(
+    #             [torch.mm(batch.float(), self.weight.cpu()) for batch in self.last_oh], dim=0)
+    #     return result
+    #
+    # def to_one_hot(self, input):
+    #     # Returns a new tensor that doesn't share memory
+    #
+    #     ones = torch.eye(self.num_embeddings, requires_grad=False)
+    #     result = torch.index_select(
+    #         ones, 0, input.cpu().view(-1).long()).view(
+    #         input.size() + (self.num_embeddings,))
+    #
+    #     result.requires_grad = self.requires_grad
+    #
+    #     return result
+
     def __repr__(self):
         # return self.__class__.__name__ + "({})".format(self.num_embeddings)
         s = '{num_embeddings}, {embedding_dim}'
@@ -169,6 +196,23 @@ class EmbeddingMul(nn.Module):
         if self.sparse is not False:
             s += ', sparse=True'
         return s.format(**self.__dict__)
+
+    @classmethod
+    def from_pretrained(cls, embeddings, freeze=True):
+        r"""Creates Embedding instance from given 2-dimensional FloatTensor.
+
+        Args:
+            embeddings (Tensor): FloatTensor containing weights for the Embedding.
+                First dimension is being passed to Embedding as 'num_embeddings', second as 'embedding_dim'.
+            freeze (boolean, optional): If ``True``, the tensor does not get updated in the learning process.
+                Equivalent to ``embedding.weight.requires_grad = False``. Default: ``True``
+        """
+        assert embeddings.dim() == 2, \
+            'Embeddings parameter is expected to be 2-dimensional'
+        rows, cols = embeddings.shape
+        embedding = cls(num_embeddings=rows, embedding_dim=cols, _weight=embeddings)
+        embedding.weight.requires_grad = not freeze
+        return embedding
 
 
 if __name__ == "__main__":
