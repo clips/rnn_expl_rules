@@ -28,13 +28,15 @@ class LSTMClassifier(nn.Module):
         else:
             self.device = torch.device('cpu')
 
+        self.hidden_in = self.init_hidden()  # initialize cell states
+
         # self.word_embeddings = nn.Embedding(self.vocab_size, self.emb_dim, padding_idx=padding_idx).to(self.device) #embedding layer, initialized at random
         self.word_embeddings = EmbeddingMul(self.vocab_size, self.emb_dim, padding_idx=padding_idx) #embedding layer, initialized at random
 
         self.lstm = nn.LSTM(self.emb_dim, self.hidden_dim, num_layers=self.n_lstm_layers, dropout=self.dropout) #lstm layers
 
         self.hidden2label = nn.Linear(self.hidden_dim, self.n_labels) #hidden to output layer
-        self.hidden = self.init_hidden() #initialize cell states
+
 
         self.to(self.device)
 
@@ -48,10 +50,10 @@ class LSTMClassifier(nn.Module):
         return (h0, c0)
 
     def detach_hidden_(self):
-        self.hidden[0].detach_()
-        self.hidden[1].detach_()
+        self.hidden_in[0].detach_()
+        self.hidden_in[1].detach_()
 
-    def forward(self, sentence, sent_lengths):
+    def forward(self, sentence, sent_lengths, hidden):
 
         sort, unsort = TorchUtils.get_sort_unsort(sent_lengths)
 
@@ -59,28 +61,29 @@ class LSTMClassifier(nn.Module):
 
         # truncating the batch length if last batch has fewer elements
         cur_batch_len = len(sent_lengths)
-        self.hidden = (self.hidden[0][:, :cur_batch_len, :], self.hidden[1][:, :cur_batch_len, :])
+        hidden = (hidden[0][:, :cur_batch_len, :], hidden[1][:, :cur_batch_len, :])
 
         # view reshapes the data to the given dimensions. -1: infer from the rest. We want (seq_len * batch_size * input_size)
         # embs = embeds.view(sentence.shape[0], sentence.shape[1], -1)
 
         # converts data to packed sequences with data and batch size at every time step after sorting them per lengths
         embs = nn.utils.rnn.pack_padded_sequence(embs[:, sort], sent_lengths[sort], batch_first=False)
+        print("embs data shape", embs.data.shape)
 
         # lstm_out: output of last lstm layer after every time step
-        # self.hidden gets the updated hidden and cell states at the end of the sequence
-        lstm_out, self.hidden = self.lstm(embs, self.hidden)
+        # hidden gets updated and cell states at the end of the sequence
+        lstm_out, hidden = self.lstm(embs, hidden)
         # pad the sequences again to convert to original padded data shape
         lstm_out, lengths = nn.utils.rnn.pad_packed_sequence(lstm_out, batch_first=False)
         # embs, __ = nn.utils.rnn.pad_packed_sequence(embs, batch_first=False)
 
         #unsort batch
         lstm_out = lstm_out[:, unsort]
-        self.hidden = (self.hidden[0][:, unsort, :], self.hidden[1][:, unsort, :])
+        hidden = (hidden[0][:, unsort, :], hidden[1][:, unsort, :])
         # use the output of the last LSTM layer at the end of the last valid timestep to predict output
-        # If sequence len is constant, using self.hidden[0] is the same as lstm_out[-1].
+        # If sequence len is constant, using hidden[0] is the same as lstm_out[-1].
         # For variable len seq, use hidden[0] for the hidden state at last valid timestep. Do it for the last hidden layer
-        y = self.hidden2label(self.hidden[0][-1])
+        y = self.hidden2label(hidden[0][-1])
         y = F.log_softmax(y, dim=1)
 
         return y
@@ -110,7 +113,7 @@ class LSTMClassifier(nn.Module):
                 cur_insts, cur_labels, cur_lengths = corpus_encoder.batch_to_tensors(cur_insts, cur_labels, self.device)
 
                 # forward pass
-                fwd_out = self.forward(cur_insts, cur_lengths)
+                fwd_out, hidden = self.forward(cur_insts, cur_lengths, self.hidden_in)
 
                 # loss calculation
                 loss = self.loss(fwd_out, cur_labels)
@@ -146,7 +149,7 @@ class LSTMClassifier(nn.Module):
             self.detach_hidden_()
 
             # forward pass
-            fwd_out = self.forward(cur_insts, cur_lengths)
+            fwd_out, hidden = self.forward(cur_insts, cur_lengths, self.hidden_in)
 
             __, cur_preds = torch.max(fwd_out.detach(), 1)  # first return value is the max value, second is argmax
             y_pred.extend(cur_preds.cpu().numpy())
@@ -206,8 +209,10 @@ if __name__ == '__main__':
     X_padded = nn.utils.rnn.pad_sequence(X, batch_first=True)
     # print(X_padded)
 
+    #create lengths here
+
     #In case of error, change line in forward: embs = embeds.view(sentence.shape[1], sentence.shape[0], -1)
-    fwd_out = lstm.forward(X_padded, [7,5])
+    fwd_out = lstm.forward(X_padded, [7,5], lengths, lstm.hidden_in)
 
     labels = torch.LongTensor([[1,0],[0,1]])
 
