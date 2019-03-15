@@ -68,7 +68,6 @@ class LSTMClassifier(nn.Module):
 
         # converts data to packed sequences with data and batch size at every time step after sorting them per lengths
         embs = nn.utils.rnn.pack_padded_sequence(embs[:, sort], sent_lengths[sort], batch_first=False)
-        print("embs data shape", embs.data.shape)
 
         # lstm_out: output of last lstm layer after every time step
         # hidden gets updated and cell states at the end of the sequence
@@ -113,7 +112,7 @@ class LSTMClassifier(nn.Module):
                 cur_insts, cur_labels, cur_lengths = corpus_encoder.batch_to_tensors(cur_insts, cur_labels, self.device)
 
                 # forward pass
-                fwd_out, hidden = self.forward(cur_insts, cur_lengths, self.hidden_in)
+                fwd_out = self.forward(cur_insts, cur_lengths, self.hidden_in)
 
                 # loss calculation
                 loss = self.loss(fwd_out, cur_labels)
@@ -149,7 +148,7 @@ class LSTMClassifier(nn.Module):
             self.detach_hidden_()
 
             # forward pass
-            fwd_out, hidden = self.forward(cur_insts, cur_lengths, self.hidden_in)
+            fwd_out = self.forward(cur_insts, cur_lengths, self.hidden_in)
 
             __, cur_preds = torch.max(fwd_out.detach(), 1)  # first return value is the max value, second is argmax
             y_pred.extend(cur_preds.cpu().numpy())
