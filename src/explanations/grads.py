@@ -45,7 +45,7 @@ class Explanation:
             cur_insts, cur_labels, cur_lengths = corpus_encoder.batch_to_tensors(cur_insts, cur_labels, model.device)
 
             # forward pass
-            fwd_out = model.forward(cur_insts, cur_lengths)
+            fwd_out = model.forward(cur_insts, cur_lengths, model.hidden_in)
             preds = torch.argmax(fwd_out.detach(), 1)
 
             #converting log softmax to softmax for gradient computation
