@@ -1,3 +1,6 @@
+import sys
+sys.path.append('/home/madhumita/PycharmProjects/sepsis/')
+
 from src.clamp.clamp_proc import Clamp
 from src.utils import FileUtils
 
@@ -113,8 +116,10 @@ class SepsisTemplate:
         for i in range(self.n_sepsis_sample_docs + self.n_negative_docs):
 
             if i < self.n_sepsis_sample_docs:
+                #populating sepsis sample docs
                 sent_list = self._get_septic_sentence_shortlist()
             else:
+                #populating negative docs
                 sent_list = list()
                 sent_list.extend(random.sample(self.negative_sents, 17))  # only negative sentences
 
