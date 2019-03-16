@@ -32,14 +32,19 @@ class Explanation:
 
         inst = cls('grad_' + grad_pooling)
 
-        # self.eval() # IMP! backward doesnt work in eval mode - open issue.
-        TorchUtils._set_eval(model)
+
+
         #activating setting to register hook. Needs to be done before the forward pass.
         model.word_embeddings.requires_emb_grad = True
 
         global_imp_lst = list()
         gold_lst = list()
         pred_lst = list()
+
+        # model.eval() # IMP! backward doesnt work in eval mode - open issue.
+        # Setting model to train mode and then toggling parameters manually
+        model.train()
+        TorchUtils._set_eval(model)
 
         for idx, (cur_insts, cur_labels) in enumerate(corpus_encoder.get_batches(corpus, model.batch_size)):
             cur_insts, cur_labels, cur_lengths = corpus_encoder.batch_to_tensors(cur_insts, cur_labels, model.device)
