@@ -32,8 +32,6 @@ class Explanation:
 
         inst = cls('grad_' + grad_pooling)
 
-
-
         #activating setting to register hook. Needs to be done before the forward pass.
         model.word_embeddings.requires_emb_grad = True
 
@@ -73,7 +71,10 @@ class Explanation:
 
             # word_imp shape: batch_size * seq_len
             word_imp = getattr(GradPooling, grad_pooling)(grads, embs)
-            global_imp_lst.extend(word_imp.tolist())
+            # keeping the importance of valid timesteps only
+            for row, cols in enumerate(cur_lengths):
+                global_imp_lst.append(word_imp[row, :cols].tolist())
+            # global_imp_lst.extend(word_imp.tolist())
 
             # recording gold and predicted labels for saving the JSON file later
             with warnings.catch_warnings():
@@ -88,7 +89,11 @@ class Explanation:
         seq_lst = corpus_encoder.get_decoded_sequences(corpus, strip_angular = True)
 
         inst.save(global_imp_lst, seq_lst, pred_lst, gold_lst,
-                  fname = 'imp_scores_' + model_type + str(model.emb_dim) + '_' + grad_pooling + '.json'
+                  fname = 'imp_scores_' +
+                          model_type +
+                          '_hid' + str(model.hidden_dim) +
+                          '_emb' + str(model.emb_dim) +
+                          '_' + grad_pooling + '.json'
                  )
         return inst
 
