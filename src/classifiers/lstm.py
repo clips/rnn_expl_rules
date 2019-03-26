@@ -190,12 +190,22 @@ class LSTMClassifier(nn.Module):
         '''
         Compute word importance scores based on backpropagated gradients
         '''
-        explanation = Explanation.get_grad_importance(self, corpus, corpus_encoder, 'dot', 'lstm')
-        eval_obj = InterpretabilityEval()
 
-        eval_obj.avg_prec_recall_f1_at_k_from_corpus(explanation.imp_scores, corpus, corpus_encoder, k = 15)
+        # methods = ['dot', 'sum', 'max', 'l2', 'max_mul', 'l2_mul', 'mod_dot']
+        methods = ['dot']
 
+        explanations = dict()
 
+        for cur_method in methods:
+            print("Pooling method: ", cur_method)
+
+            explanation = Explanation.get_grad_importance(self, corpus, corpus_encoder, cur_method, 'lstm')
+            explanations[cur_method] = explanation
+
+            eval_obj = InterpretabilityEval()
+            eval_obj.avg_prec_recall_f1_at_k_from_corpus(explanation.imp_scores, corpus, corpus_encoder, k = 15)
+
+        return explanations
 
 if __name__ == '__main__':
     lstm = LSTMClassifier(2, 100, 50, 50, 0.5, 2, 2)

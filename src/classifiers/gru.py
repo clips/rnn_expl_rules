@@ -181,22 +181,24 @@ class GRUClassifier(nn.Module):
 
         return classifier
 
-    def _set_eval(self):
-        '''
-        Switch off the training behaviour of the parameters
-        '''
-        for p in self.parameters():
-            p.train = False
-
     def get_importance(self, corpus, corpus_encoder):
         '''
         Compute word importance scores based on backpropagated gradients
         '''
-        explanation = Explanation.get_grad_importance(self, corpus, corpus_encoder, 'mod_dot', 'gru')
-        eval_obj = InterpretabilityEval()
+        # methods = ['dot', 'sum', 'max', 'l2', 'max_mul', 'l2_mul', 'mod_dot']
+        methods = ['dot']
+        explanations = dict()
 
-        eval_obj.avg_prec_recall_f1_at_k_from_corpus(explanation.imp_scores, corpus, corpus_encoder, k = 15)
+        for cur_method in methods:
+            print("Pooling method: ", cur_method)
 
+            explanation = Explanation.get_grad_importance(self, corpus, corpus_encoder, cur_method, 'gru')
+            explanations[cur_method] = explanation
+
+            eval_obj = InterpretabilityEval()
+            eval_obj.avg_prec_recall_f1_at_k_from_corpus(explanation.imp_scores, corpus, corpus_encoder, k = 15)
+
+        return explanations
 
 if __name__ == '__main__':
     gru = GRUClassifier(2, 100, 50, 50, 0.5, 2, 2)
