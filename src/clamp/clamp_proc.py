@@ -9,6 +9,11 @@ class Entity:
         self.assertion = assertion
         self.cui = cui
 
+class Relation:
+    def __init__(self, ent1, ent2, rel):
+        self.entity1 = ent1
+        self.entity2 = ent2
+        self.rel = rel
 
 class Clamp:
 
@@ -42,4 +47,39 @@ class Clamp:
 
         return entities
 
+    def get_relations_neg(self, fname, dir_clamp, dir_text):
+        rels = list()  # list of Relation objects
 
+        text = open(realpath(join(dir_text, fname))).read()
+
+        with open(realpath(join(dir_clamp, fname))) as f:
+
+            for line in f:
+                line = line.split('\t')
+
+                if line[0] != 'Relation':
+                    # print("Not a relation")
+                    continue #we are only interested in relations
+
+                if line[7].split('=')[1].strip() != 'NEG_Of':
+                    continue #not interested in non-negation relations
+                rel_type = 'NEG_Of'
+
+                begin1, end1, semtype1 = int(line[1]), int(line[2]), line[3] #semtype1 is problem/treatment/test
+                begin2, end2, semtype2 = int(line[4]), int(line[5]), line[6] #semtype2 is
+
+                ent1 = Entity(begin=begin1, end=end1, sem_type=semtype1, mention=text[begin1:end1])
+                ent2 = Entity(begin=begin2, end=end2, sem_type=semtype2, mention=text[begin2:end2])
+
+                cur_rel = Relation(ent1, ent2, rel_type)
+
+                rels.append(cur_rel)
+
+        return rels
+
+if __name__ == '__main__':
+    clamp_obj = Clamp()
+
+    entities = clamp_obj.get_entities(f_clamp='1.txt', dir_clamp = '/home/madhumita/dataset/sepsis_synthetic/clamp')
+    rels = clamp_obj.get_relations_neg(fname='1.txt', dir_clamp = '/home/madhumita/dataset/sepsis_synthetic/clamp',
+                                       dir_text='/home/madhumita/dataset/sepsis_synthetic/text')
