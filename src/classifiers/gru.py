@@ -181,12 +181,14 @@ class GRUClassifier(nn.Module):
 
         return classifier
 
-    def get_importance(self, corpus, corpus_encoder):
+    def get_importance(self, corpus, corpus_encoder, eval_obj):
         '''
         Compute word importance scores based on backpropagated gradients
         '''
+
         # methods = ['dot', 'sum', 'max', 'l2', 'max_mul', 'l2_mul', 'mod_dot']
         methods = ['dot']
+
         explanations = dict()
 
         for cur_method in methods:
@@ -195,7 +197,6 @@ class GRUClassifier(nn.Module):
             explanation = Explanation.get_grad_importance(self, corpus, corpus_encoder, cur_method, 'gru')
             explanations[cur_method] = explanation
 
-            eval_obj = InterpretabilityEval()
             eval_obj.avg_prec_recall_f1_at_k_from_corpus(explanation.imp_scores, corpus, corpus_encoder, k = 15)
 
         return explanations

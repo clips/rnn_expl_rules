@@ -186,7 +186,7 @@ class LSTMClassifier(nn.Module):
         return classifier
 
 
-    def get_importance(self, corpus, corpus_encoder):
+    def get_importance(self, corpus, corpus_encoder, eval_obj):
         '''
         Compute word importance scores based on backpropagated gradients
         '''
@@ -202,7 +202,6 @@ class LSTMClassifier(nn.Module):
             explanation = Explanation.get_grad_importance(self, corpus, corpus_encoder, cur_method, 'lstm')
             explanations[cur_method] = explanation
 
-            eval_obj = InterpretabilityEval()
             eval_obj.avg_prec_recall_f1_at_k_from_corpus(explanation.imp_scores, corpus, corpus_encoder, k = 15)
 
         return explanations

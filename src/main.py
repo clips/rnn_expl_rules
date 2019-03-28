@@ -6,7 +6,7 @@ from src.classifiers.lstm import LSTMClassifier
 from src.classifiers.gru import GRUClassifier
 from src.explanations.grads import Explanation
 from src.explanations.eval import InterpretabilityEval
-from src.explanations.rules import SeqSkipGram
+from src.explanations.imp_sg import SeqSkipGram
 
 import torch
 from os.path import exists, realpath, join
@@ -116,8 +116,8 @@ def main():
     # explanations = classifier.get_importance(val_corp, corpus_encoder, eval_obj)
 
     #getting skipgrams
-    # seqs = corpus_encoder.get_decoded_sequences(val_corp)
-    # sg = SeqSkipGram.from_seqs(seqs, explanations['dot'].imp_scores, min_n = 1, max_n = 4, skip = 3, topk=5)
+    seqs = corpus_encoder.get_decoded_sequences(val_corp)
+    sg = SeqSkipGram.from_seqs(seqs, explanations['dot'].imp_scores, min_n = 1, max_n = 4, skip = 3, topk=5)
 
 
 if __name__ == '__main__':
