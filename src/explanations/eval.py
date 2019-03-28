@@ -19,7 +19,8 @@ def populate_neg_cues(dir_clamp, dir_text):
     for fname in os.listdir(dir_clamp):
         rels = clamp_obj.get_relations_neg(fname, dir_clamp, dir_text)
         for cur_rel in rels:
-            if cur_rel.entity1.mention.lower() in SEPSIS_GOLD:
+            #check if the mention contains any of the keywords
+            if any(i in cur_rel.entity1.mention.lower() for i in SEPSIS_GOLD):
                 NEG_CUES.add(cur_rel.entity2.mention)
 
     print("Negation cues populated; Number of unique cue phrases:", len(NEG_CUES))
