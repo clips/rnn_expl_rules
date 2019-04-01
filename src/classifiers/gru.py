@@ -57,7 +57,7 @@ class GRUClassifier(nn.Module):
 
         # truncating the batch length if last batch has fewer elements
         cur_batch_len = len(sent_lengths)
-        hidden = hidden[:, :cur_batch_len, :]
+        hidden = hidden[:, :cur_batch_len, :].contiguous()
 
         # view reshapes the data to the given dimensions. -1: infer from the rest. We want (seq_len * batch_size * input_size)
         # embs = embeds.view(sentence.shape[0], sentence.shape[1], -1)
