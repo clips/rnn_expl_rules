@@ -156,7 +156,7 @@ class SepsisTemplate:
 
     def get_septic_labels(self, dir_clamp, dir_labels):
 
-        clamp_obj = Clamp()
+        clamp_obj = Clamp(dir_clamp)
 
         labels = dict()
         n_septic = 0
@@ -167,7 +167,7 @@ class SepsisTemplate:
             is_infected = False
             n_present_labs = 0
 
-            entities = clamp_obj.get_entities(str(i) + '.txt', dir_clamp)
+            entities = clamp_obj.get_entities(str(i) + '.txt')
 
             for cur_entity in entities:
                 if not is_infected:
