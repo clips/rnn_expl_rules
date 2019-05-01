@@ -44,7 +44,7 @@ class Explanation:
         model.train()
         TorchUtils._set_eval(model)
 
-        for idx, (cur_insts, cur_labels) in enumerate(corpus_encoder.get_batches(corpus, model.batch_size)):
+        for idx, (cur_insts, cur_labels) in enumerate(corpus_encoder.get_batches_from_corpus(corpus, model.batch_size)):
             cur_insts, cur_labels, cur_lengths = corpus_encoder.batch_to_tensors(cur_insts, cur_labels, model.device)
 
             # forward pass

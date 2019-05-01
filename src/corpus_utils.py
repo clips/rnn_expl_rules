@@ -91,8 +91,6 @@ class Corpus:
                     word_seq.extend(self.text_processor(line))
                 yield (word_seq, cur_label)
 
-
-
 class CorpusEncoder:
 
     def __init__(self, vocab):#, skipgrams):
@@ -103,11 +101,9 @@ class CorpusEncoder:
     def from_corpus(cls, *corpora):
         # create vocab set for initializing Vocab class
         vocab_set = set()
-        # sg_set = set()
 
         for corpus in corpora:
             for (words, labels) in corpus:
-                # sg_set.add(skipgrams(words, n = 3, k = 1))
                 for word in words:
                     if not word in vocab_set:
                         vocab_set.add(word)
@@ -116,15 +112,12 @@ class CorpusEncoder:
         # create vocabs
         #@todo: add min and max freq to vocab items
         vocab = Vocab.populate_indices(vocab_set, unk=UNK, pad=PAD)#bos=BOS, eos=EOS, bol=BOL, eol=EOL),
-        # sg = Vocab.populate_indices(sg_set)
 
-        # return cls(vocab, sg)
         return cls(vocab)
 
     def encode_inst(self, inst):
         '''
         Converts sentence to sequence of indices after adding beginning, end and replacing unk tokens.
-        @todo: check if beg and end of seq and line are required for our classification setup.
         '''
         out = [self.transform_item(i) for i in inst]
         # if self.vocab.bos is not None:
@@ -145,7 +138,7 @@ class CorpusEncoder:
             else:
                 return self.vocab.unk
 
-    def get_batches(self, corpus, batch_size):
+    def get_batches_from_corpus(self, corpus, batch_size):
 
         instances = list()
         labels = list()
@@ -161,6 +154,20 @@ class CorpusEncoder:
 
         if instances:
             yield (instances, labels)
+
+    def get_batches_from_insts(self, insts, batch_size):
+
+        instances = list()
+
+        for cur_inst in insts:
+            cur_inst = self.encode_inst(cur_inst)
+            instances.append(cur_inst)
+            if len(instances) == batch_size:
+                yield instances
+                instances = list()
+
+        if instances:
+            yield instances
 
     def batch_to_tensors(self, cur_insts, cur_labels, device):
         '''
@@ -179,9 +186,16 @@ class CorpusEncoder:
         #contiguous() makes a copy of tensor so the order of elements would be same as if created from scratch.
         t = t.t().contiguous().to(device)
         lengths = torch.tensor(lengths, dtype = torch.int).to(device)
-        labels = torch.LongTensor(cur_labels).to(device)
+
+        if cur_labels:
+            labels = torch.LongTensor(cur_labels).to(device)
+        else:
+            labels = None
 
         return t, labels, lengths
+
+    # def inst_to_tensor(self, cur_inst, device):
+    #     return torch.LongTensor(cur_inst).to(device)
 
     def decode_inst(self, inst):
         out = [self.vocab.idx2word[i] for i in inst if i != self.vocab.pad]

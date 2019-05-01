@@ -59,9 +59,6 @@ class GRUClassifier(nn.Module):
         cur_batch_len = len(sent_lengths)
         hidden = hidden[:, :cur_batch_len, :].contiguous()
 
-        # view reshapes the data to the given dimensions. -1: infer from the rest. We want (seq_len * batch_size * input_size)
-        # embs = embeds.view(sentence.shape[0], sentence.shape[1], -1)
-
         # converts data to packed sequences with data and batch size at every time step after sorting them per lengths
         embs = nn.utils.rnn.pack_padded_sequence(embs[:, sort], sent_lengths[sort], batch_first=False)
 
@@ -104,7 +101,7 @@ class GRUClassifier(nn.Module):
             corpus.fname_subset, corpus.labels = zip(*combined)
 
             #get train batch
-            for idx, (cur_insts, cur_labels) in enumerate(corpus_encoder.get_batches(corpus, self.batch_size)):
+            for idx, (cur_insts, cur_labels) in enumerate(corpus_encoder.get_batches_from_corpus(corpus, self.batch_size)):
                 cur_insts, cur_labels, cur_lengths = corpus_encoder.batch_to_tensors(cur_insts, cur_labels, self.device)
 
                 # forward pass
@@ -136,7 +133,7 @@ class GRUClassifier(nn.Module):
         y_pred = list()
         y_true = list()
 
-        for idx, (cur_insts, cur_labels) in enumerate(corpus_encoder.get_batches(corpus, self.batch_size)):
+        for idx, (cur_insts, cur_labels) in enumerate(corpus_encoder.get_batches_from_corpus(corpus, self.batch_size)):
             cur_insts, cur_labels, cur_lengths = corpus_encoder.batch_to_tensors(cur_insts, cur_labels, self.device)
 
             y_true.extend(cur_labels.cpu().numpy())
@@ -151,6 +148,38 @@ class GRUClassifier(nn.Module):
 
 
         return y_pred, y_true
+
+    def predict_from_insts(self, texts, encoder, get_prob = False):
+        '''
+        :param texts: 2D list, n_inst * n_words for every instance
+        :param encoder: corpus encoder object
+        :param get_prob: True to get probability output
+        :param batch_size: num_inst per batch for the model
+        :return: output prediction -- class/prob
+        '''
+        self.eval()
+
+        preds = list()
+
+        for cur_batch in encoder.get_batches_from_insts(texts, self.batch_size):
+
+            # tensors shape maxlen * n_inst
+            # lengths is a list of lengths
+            tensors, __, lengths = encoder.batch_to_tensors(cur_batch, None, self.device)
+
+            self.detach_hidden_()
+
+            # forward pass
+            fwd_out = self.forward(tensors, lengths, self.hidden_in)
+
+            if get_prob:
+                fwd_out = torch.exp(fwd_out)  # back from log_softmax to softmax
+                preds.extend(fwd_out.detach().cpu().numpy())
+            else:
+                cur_preds = torch.argmax(fwd_out.detach(), 1)
+                preds.extend(cur_preds.cpu().numpy())
+
+        return preds
 
     def save(self, f_model = 'gru_classifier.tar', dir_model = '../out/'):
 
@@ -212,7 +241,6 @@ if __name__ == '__main__':
     X_padded = nn.utils.rnn.pad_sequence(X, batch_first=True)
     # print(X_padded)
 
-    #In case of error, change line in forward: embs = embeds.view(sentence.shape[1], sentence.shape[0], -1)
     fwd_out = gru.forward(X_padded, [7, 5], gru.hidden_in)
 
     labels = torch.LongTensor([[1,0],[0,1]])
