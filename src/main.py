@@ -7,11 +7,21 @@ from src.classifiers.gru import GRUClassifier
 from src.explanations.grads import Explanation
 from src.explanations.eval import InterpretabilityEval
 from src.explanations.imp_sg import SeqSkipGram
+from src.clamp.clamp_proc import Clamp
+from src.utils import FileUtils
+from src.weka_utils.vec_to_arff import get_feat_dict, write_arff_file
 
 import torch
 from os.path import exists, realpath, join
 from os import makedirs
 from sklearn.metrics import f1_score
+
+import numpy as np
+
+import resource
+soft, hard = 5.4e+10, 5.4e+10 #nearly 50GB
+resource.setrlimit(resource.RLIMIT_AS,(soft, hard))
+
 
 def main():
     # dir_corpus = '/home/madhumita/dataset/sepsis_synthetic/text/'
@@ -33,10 +43,11 @@ def main():
     #initialize corpora
     train_corp = Corpus(dir_corpus, f_labels, dir_labels, train_split)
     val_corp = Corpus(dir_corpus, f_labels, dir_labels, val_split)
+    test_corp = Corpus(dir_corpus, f_labels, dir_labels, test_split)
 
     # train_model = True
     train_model = False
-    model = 'lstm' #lstm|gru
+    model_name = 'lstm' #lstm|gru
 
     load_encoder = True
     fname_encoder = 'corpus_encoder.json'
@@ -67,9 +78,9 @@ def main():
                       'batch_size': 64
                       }
 
-        if model == 'lstm':
+        if model_name == 'lstm':
             classifier = LSTMClassifier(**net_params)
-        elif model == 'gru':
+        elif model_name == 'gru':
             classifier = GRUClassifier(**net_params)
         else:
             raise ValueError("Model should be either 'gru' or 'lstm'")
@@ -79,27 +90,50 @@ def main():
         optimizer = torch.optim.Adam(classifier.parameters(), lr=lr)
 
         classifier.train_model(train_corp, corpus_encoder, n_epochs, optimizer)
-        classifier.save(f_model=model+'_classifier_hid'+str(net_params['hidden_dim'])+'_emb'+str(net_params['embedding_dim'])+'.tar')
+        classifier.save(f_model=model_name+'_classifier_hid'+str(net_params['hidden_dim'])+'_emb'+str(net_params['embedding_dim'])+'.tar')
 
     else:
         #load model
-        if model == 'lstm':
-            classifier= LSTMClassifier.load(f_model='lstm_classifier_hid50_emb100.tar')
-        elif model == 'gru':
-            classifier= GRUClassifier.load(f_model='gru_classifier_hid100_emb100.tar')
+        if model_name == 'lstm':
+            classifier= LSTMClassifier.load(f_model='lstm_classifier_hid100_emb100.tar')
+        elif model_name == 'gru':
+            classifier= GRUClassifier.load(f_model='gru_classifier_hid50_emb100.tar')
         else:
             raise ValueError("Model should be either 'gru' or 'lstm'")
 
+    test_mode = 'test' #val | test
+    if test_mode == 'val':
+        eval_corp = val_corp
+    elif test_mode == 'test':
+        eval_corp = test_corp
+    else:
+        raise ValueError("Specify val|test corpus for evaluation")
+
+    print("Testing on {} data".format(test_mode))
+
     #get predictions
-    y_pred, y_true = classifier.predict(val_corp, corpus_encoder)
+    y_pred, y_true = classifier.predict(eval_corp, corpus_encoder)
 
     #compute scoring metrics
     print(f1_score(y_true=y_true, y_pred=y_pred, average='macro'))
 
-    eval_obj = InterpretabilityEval(dir_clamp, dir_corpus)
 
-    methods = ['dot', 'mod_dot', 'sum', 'l2', 'max', 'max_mul', 'l2_mul']
-    # methods = ['dot']
+    # populating weka files for interpretability
+    clamp_obj = Clamp(dir_clamp)
+    train_sg, train_sg_bag = get_sg_bag(clamp_obj, train_corp, classifier, corpus_encoder, model_name, 'train')
+    val_sg, val_sg_bag = get_sg_bag(clamp_obj, val_corp, classifier, corpus_encoder, model_name, 'val', train_sg.vocab)
+    test_sg, test_sg_bag = get_sg_bag(clamp_obj, test_corp, classifier, corpus_encoder, model_name, 'test', train_sg.vocab)
+
+
+
+def get_sg_bag(clamp_obj, eval_corp, classifier, encoder, model_name, subset, vocab = None, search_sg_params = False):
+
+    print("Getting top skipgrams for subset {}".format(subset))
+
+    eval_obj = InterpretabilityEval(eval_corp, clamp_obj)
+
+    # methods = ['l2', 'sum', 'max', 'dot', 'max_mul']
+    methods = ['dot']
 
     explanations = dict()
 
@@ -107,18 +141,62 @@ def main():
         print("Pooling method: ", cur_method)
 
         # computing word importance scores
-        explanation = Explanation.get_grad_importance(classifier, val_corp, corpus_encoder, cur_method, model)
+        explanation = Explanation.get_grad_importance(classifier, eval_corp, encoder, cur_method, model_name)
         explanations[cur_method] = explanation
+        # eval_obj.avg_acc_from_corpus(explanation.imp_scores, eval_corp, corpus_encoder)
 
-        eval_obj.avg_prec_recall_f1_at_k_from_corpus(explanation.imp_scores, val_corp, corpus_encoder, k=15)
+    # getting skipgrams
+    seqs = encoder.get_decoded_sequences(eval_corp)
 
+    if search_sg_params:
+        # search over best min_n, max_n and skip parameters
+        min_n, max_n, skip = sg_param_search(seqs, explanations['dot'].imp_scores, eval_obj)
+    else:
+        min_n, max_n, skip = 1, 6, 1
 
-    # explanations = classifier.get_importance(val_corp, corpus_encoder, eval_obj)
+    sg = SeqSkipGram.from_seqs(seqs, explanations['dot'].imp_scores, min_n=min_n, max_n=max_n, skip=skip,
+                               topk=50, vocab = vocab, max_vocab_size=5000)
 
-    #getting skipgrams
-    seqs = corpus_encoder.get_decoded_sequences(val_corp)
-    sg = SeqSkipGram.from_seqs(seqs, explanations['dot'].imp_scores, min_n = 1, max_n = 4, skip = 3, topk=5)
+    # create bow from sg seqs
+    sg_bag = sg.seq_to_sg_bag()
 
+    # convert to ternary values
+    sg_bag = np.sign(sg_bag).astype('int')
+
+    # write as arff file
+    feat_dict = get_feat_dict(sg.vocab.term2idx, vec_type='signed')
+    rel_name = model_name + '_hid' + str(classifier.hidden_dim) + '_emb' + str(classifier.emb_dim) + '_synthetic' \
+               + '_min' + str(min_n) + '_max' + str(max_n) + '_skip' + str(skip) + '_'
+    write_arff_file(rel_name, feat_dict, eval_corp.label_encoder.classes_, sg_bag, eval_corp.labels, '../out/weka/',
+                    rel_name + subset + '_pred.arff')
+
+    return sg, sg_bag
+
+def sg_param_search(seqs, scores, eval_obj):
+
+    prec = dict()
+    best_prec, best_min_n, best_max_n, best_skip = 0., None, None, None
+
+    for min_n in range(1, 5):
+        for max_n in range(min_n, min_n + 4):
+            for skip in range(11):
+                sg = SeqSkipGram.from_seqs(seqs, scores, min_n=1, max_n=max_n, skip=skip, topk=50)
+                cur_prec = eval_obj.avg_prec_sg(sg.top_sg_seqs)
+                prec[repr((min_n, max_n, skip))] = cur_prec  # converting key to string for JSON serialization
+
+                if cur_prec > best_prec:
+                    best_prec, best_min_n, best_max_n, best_skip = cur_prec, min_n, max_n, skip
+
+                print("Average precision at min_n {}, max_n {}, skip {} is: {}".format(min_n, max_n, skip, cur_prec))
+                if max_n == 1:
+                    break  # all skip values will give the same unigram. Hence iterating over it only once.
+
+    print(
+        "Maximum precision {} for min_n {}, max_n {} and skip {}".format(best_prec, best_min_n, best_max_n, best_skip))
+
+    FileUtils.write_json(prec, 'sg_param_search.json', '../out/')
+
+    return best_min_n, best_max_n, best_skip
 
 if __name__ == '__main__':
     main()
