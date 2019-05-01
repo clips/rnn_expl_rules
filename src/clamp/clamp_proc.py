@@ -17,9 +17,12 @@ class Relation:
 
 class Clamp:
 
-    def get_entities(self, f_clamp, dir_clamp):
+    def __init__(self, dir_clamp):
+        self.dir_clamp = dir_clamp
+
+    def get_entities(self, f_clamp):
         entities = list() #list of Entity objects
-        with open(realpath(join(dir_clamp, f_clamp))) as f:
+        with open(realpath(join(self.dir_clamp, f_clamp))) as f:
 
             for line in f:
                 line = line.split('\t')
@@ -47,12 +50,12 @@ class Clamp:
 
         return entities
 
-    def get_relations_neg(self, fname, dir_clamp, dir_text):
+    def get_relations_neg(self, fname, dir_text):
         rels = list()  # list of Relation objects
 
         text = open(realpath(join(dir_text, fname))).read()
 
-        with open(realpath(join(dir_clamp, fname))) as f:
+        with open(realpath(join(self.dir_clamp, fname))) as f:
 
             for line in f:
                 line = line.split('\t')
@@ -78,8 +81,8 @@ class Clamp:
         return rels
 
 if __name__ == '__main__':
-    clamp_obj = Clamp()
+    clamp_obj = Clamp(dir_clamp = '/home/madhumita/dataset/sepsis_synthetic/clamp')
 
-    entities = clamp_obj.get_entities(f_clamp='1.txt', dir_clamp = '/home/madhumita/dataset/sepsis_synthetic/clamp')
-    rels = clamp_obj.get_relations_neg(fname='1.txt', dir_clamp = '/home/madhumita/dataset/sepsis_synthetic/clamp',
+    entities = clamp_obj.get_entities(f_clamp='1.txt')
+    rels = clamp_obj.get_relations_neg(fname='1.txt',
                                        dir_text='/home/madhumita/dataset/sepsis_synthetic/text')
