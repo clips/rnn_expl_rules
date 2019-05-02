@@ -108,18 +108,22 @@ def evaluate_classifier(cls, train_data, test_data):
 
     return evl
 
-def optimize_rule_params(classifier, train_data, val_data, test_data, incremental, train_dl, optimize):
+def optimize_rule_params(classifier, train_data, val_data, test_data, incremental, train_dl, metric):
     """
     Iterate over different parameter values and train a rule induction model. The best parameters are retained.
     :param classifier: string name of the classification algorithm to use
-    :param train_data: Data to use for training and evaluating
-    :param incremental: True if data is loaded incremetally
+    :param train_data: Data to use for inducing rules
+    :param val_data: Data for tuning hyperparameters
+    :param test_data: Data for testing rule transferrability
+    :param incremental: True if data is loaded incrementally
     :param train_dl: Data loader object if incremental is True
-    :param class_index: Index of the class to compute F-score. None gives a macro-averaged F-score.
+    :param metric: metric to evaluate the rule induction model using
+    :return the final model for rule induction
     """
     stats = train_data.attribute_stats(train_data.class_index)
     min_inst = min(stats.nominal_counts)
 
+    #works for binary setup
     if stats.nominal_counts[0] == min_inst:
         class_index = 0
     elif stats.nominal_counts[1] == min_inst:
@@ -131,11 +135,10 @@ def optimize_rule_params(classifier, train_data, val_data, test_data, incrementa
         print("Skipping this class because there are too few instances")
         return
 
-    print("Optimizing over classifier parameters")
+    print("Optimizing over parameters of explaining model")
 
     best_n, best_model, best_eval, best_score = None, None, None, None
 
-    # start_n = math.floor(0.01*min_inst)
     # start_n = 2
     # stop_n = 11 if min_inst >= 10 else min_inst
     # step = 1
@@ -143,25 +146,16 @@ def optimize_rule_params(classifier, train_data, val_data, test_data, incrementa
     stop_n = int(min_inst/100)
     step = start_n
 
-    # seeds = np.arange(0, 20, 1) #analyzing performance for 20 seeds
-
     for n in range(start_n, stop_n, step):
+    # for n in range(300, 301, 1):
+
+        print("Minimum correctly covered instances: ", n)
 
         cls = get_classifier(classifier, n)
         cls = build_classifier(train_data, cls, incremental, train_dl)
 
         evl = evaluate_classifier(cls, train_data, val_data)
-
-        if optimize == 'f-score':
-            # if class_index is None:
-            #     cur_score = evl.unweighted_macro_f_measure
-            #     print("Unweighted macro f-measure for N {}: {} \n".format(n, cur_score))
-            # else:
-            cur_score = evl.f_measure(class_index)
-            print("F-score for this class for N {}: {} \n".format(n, cur_score))
-        elif optimize == 'prec':
-            cur_score = evl.weighted_precision
-            print("Weighted precision for N {}: {} \n".format(n, cur_score))
+        cur_score = _get_score(metric, evl, class_index)
 
         if math.isnan(cur_score):
             break  # don't iterate to higher N value if current value covers zero instances for any class.
@@ -179,31 +173,59 @@ def optimize_rule_params(classifier, train_data, val_data, test_data, incrementa
         return
 
     test_evl = evaluate_classifier(best_model, train_data, test_data)
-    # if class_index is None:
-    #     test_score = test_evl.unweighted_macro_f_measure
-    # else:
-    test_score = test_evl.f_measure(class_index)
+    test_score = _get_score(metric, test_evl, class_index)
 
     print("Final results: ")
     print("Best performance found for N {}".format(best_n))
-    print("Corresponding model: ", best_model)
-    print("Corresponding results, validation: ", best_eval.summary())
+    print("Best model: ", best_model)
 
-    # if class_index is not None:
-    print("Precision, recall, F-score for the given minority class: ",
-          best_eval.precision(class_index),
-          best_eval.recall(class_index),
-          best_score)
-    # else:
-    #     print("Unweighted Macro precision, recall and F-score:",
-    #           (best_eval.precision(0) + best_eval.precision(1)) / 2,
-    #           (best_eval.recall(0) + best_eval.recall(1)) / 2,
-    #           best_score)
-    print("Corresponding confusion matrix: \n", best_eval.confusion_matrix)
+    print("\n Validation set results: ", best_eval.summary())
+    # print("Precision, recall, F-score for the minority class: ",
+    #       best_eval.precision(class_index),
+    #       best_eval.recall(class_index),
+    #       best_score)
+    print("Optimized metric {} on validation set {}: ".format(metric, _get_score(metric, best_eval, class_index)))
+    print("Validation set confusion matrix: \n", best_eval.confusion_matrix)
 
-    print("\n Corresponding results, test:", test_evl.summary())
-    print("Test score:", test_score)
+    print("\n Test results:", test_evl.summary())
+    print("Test score for metric {}: {}".format(metric, test_score))
     print("Test confusion matrix:", test_evl.confusion_matrix)
+
+    return best_model
+
+
+def get_rule_covering_inst(classifier, data, inst_idx):
+    '''
+    Finds the rule in a learned JRIP model that covers an instance
+    :param classifier: trained JRIP model
+    :param data: weka dataset
+    :param inst_idx: instance ID to find corresponding rule of
+    '''
+    rset = classifier.jwrapper.getRuleset()
+    for i in range(rset.size()):
+        r = rset.get(i)
+        # print("Current rule:", str(r.toString(data.class_attribute.jobject)))
+        if r.covers(data.get_instance(inst_idx).jobject):
+            print("Instance is covered by rule:", str(r.toString(data.class_attribute.jobject)))
+            break
+
+def _get_score(metric, evl, class_index):
+    if metric == 'class-f-score':
+        score = evl.f_measure(class_index)
+        print("F-score for the minority class: {} \n".format(score))
+    elif metric == 'macro-f-score':
+        score = evl.unweighted_macro_f_measure
+        print("Unweighted macro f-measure: {} \n".format(score))
+    elif metric == 'wt-prec':
+        score = evl.weighted_precision
+        print("Weighted precision: {} \n".format(score))
+    elif metric == 'class-prec':
+        score = evl.precision(class_index)
+        print("Precision for the minority class: {} \n".format(score))
+    else:
+        raise ValueError("Please enter the correct metric (class-f-score|macro-f-score|wt-prec|class-prec)")
+
+    return score
 
 def induce_explanations(classifier, opt_metric, train_data, val_data, test_data, data_dir='../../data/'):
     """
@@ -235,9 +257,14 @@ def induce_explanations(classifier, opt_metric, train_data, val_data, test_data,
                 new_val_data = merge_classes(val_data, ','.join(to_merge))
                 new_test_data = merge_classes(test_data, ','.join(to_merge))
 
-                optimize_rule_params(classifier, new_train_data, new_val_data, new_test_data, incremental, train_dl, opt_metric) #merged attribute is always the last one, so 0 index for desired class
+                best_model = optimize_rule_params(classifier, new_train_data, new_val_data, new_test_data, incremental, train_dl, opt_metric) #merged attribute is always the last one, so 0 index for desired class
         else:
-            optimize_rule_params(classifier, train_data, val_data, test_data, incremental, train_dl, opt_metric) #normal learning for binary cases
+            best_model = optimize_rule_params(classifier, train_data, val_data, test_data, incremental, train_dl, opt_metric) #normal learning for binary cases
+
+        idx_to_explain = 6837
+        print("Finding the rule that covers instance {} of validation data".format(idx_to_explain))
+        if classifier == 'jrip':
+            get_rule_covering_inst(best_model, val_data, idx_to_explain)
 
     except Exception as e:
         print(e)
@@ -246,8 +273,8 @@ def induce_explanations(classifier, opt_metric, train_data, val_data, test_data,
 
 
 if __name__ == '__main__':
-    classifier = 'part'
-    optimize = 'prec'
+    classifier = 'jrip'
+    optimize = 'macro-f-score'
     train_data = 'lstm_hid100_emb100_synthetic_min1_max6_skip1_train_pred.arff'
     val_data = 'lstm_hid100_emb100_synthetic_min1_max6_skip1_val_pred.arff'
     test_data = 'lstm_hid100_emb100_synthetic_min1_max6_skip1_test_pred.arff'
