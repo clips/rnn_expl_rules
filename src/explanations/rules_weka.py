@@ -4,9 +4,9 @@ from weka.core.classes import Random
 from weka.classifiers import Classifier
 from weka.classifiers import Evaluation
 from weka.filters import Filter
+import weka.core.serialization as serialization
 
 import math
-import numpy as np
 from itertools import combinations
 from os.path import join, realpath
 
@@ -193,6 +193,15 @@ def optimize_rule_params(classifier, train_data, val_data, test_data, incrementa
 
     return best_model
 
+def save_model(model, fname, dir_name):
+    outfile = realpath(join(dir_name, fname)) #"j48.model"
+    serialization.write(outfile, model)
+
+def load_model(fname, dir_name):
+    outfile = realpath(join(dir_name, fname))
+    model = Classifier(jobject=serialization.read(outfile))
+    print(model)
+    return model
 
 def get_rule_covering_inst(classifier, data, inst_idx):
     '''
@@ -201,12 +210,16 @@ def get_rule_covering_inst(classifier, data, inst_idx):
     :param data: weka dataset
     :param inst_idx: instance ID to find corresponding rule of
     '''
+    merge_filter = Filter(classname="weka.filters.supervised.attribute.ClassOrder",
+                          options=["-C", "0"])
+    merge_filter.inputformat(data)
+    ordered_data = merge_filter.filter(data)
+
     rset = classifier.jwrapper.getRuleset()
     for i in range(rset.size()):
         r = rset.get(i)
-        # print("Current rule:", str(r.toString(data.class_attribute.jobject)))
         if r.covers(data.get_instance(inst_idx).jobject):
-            print("Instance is covered by rule:", str(r.toString(data.class_attribute.jobject)))
+            print("Instance is covered by current rule:", str(r.toString(ordered_data.class_attribute.jobject)))
             break
 
 def _get_score(metric, evl, class_index):
@@ -227,7 +240,7 @@ def _get_score(metric, evl, class_index):
 
     return score
 
-def induce_explanations(classifier, opt_metric, train_data, val_data, test_data, data_dir='../../data/'):
+def induce_explanations(classifier, opt_metric, train_data, val_data, test_data, data_dir, out_fname, dir_out):
     """
     Induce the rules using RIPPERk (JRIP) or trees using C4.5
     :param classifier: string name of classification method to use
@@ -261,6 +274,8 @@ def induce_explanations(classifier, opt_metric, train_data, val_data, test_data,
         else:
             best_model = optimize_rule_params(classifier, train_data, val_data, test_data, incremental, train_dl, opt_metric) #normal learning for binary cases
 
+        save_model(best_model, out_fname, dir_out)
+
         idx_to_explain = 6837
         print("Finding the rule that covers instance {} of validation data".format(idx_to_explain))
         if classifier == 'jrip':
@@ -275,8 +290,11 @@ def induce_explanations(classifier, opt_metric, train_data, val_data, test_data,
 if __name__ == '__main__':
     classifier = 'jrip'
     optimize = 'macro-f-score'
-    train_data = 'lstm_hid100_emb100_synthetic_min1_max6_skip1_train_pred.arff'
-    val_data = 'lstm_hid100_emb100_synthetic_min1_max6_skip1_val_pred.arff'
-    test_data = 'lstm_hid100_emb100_synthetic_min1_max6_skip1_test_pred.arff'
+    train_data = 'lstm_hid50_emb100_synthetic_min1_max6_skip1_train_pred.arff'
+    val_data = 'lstm_hid50_emb100_synthetic_min1_max6_skip1_val_pred.arff'
+    test_data = 'lstm_hid50_emb100_synthetic_min1_max6_skip1_test_pred.arff'
     data_dir = '../../out/weka/'
-    induce_explanations(classifier, optimize, train_data, val_data, test_data, data_dir )
+
+    out_fname = classifier +'_'+ train_data.strip('.arff') + '.model'
+    dir_out = '../../out/weka/'
+    induce_explanations(classifier, optimize, val_data, val_data, test_data, data_dir, out_fname, dir_out )
