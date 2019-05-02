@@ -292,9 +292,9 @@ if __name__ == '__main__':
     optimize = 'macro-f-score'
     train_data = 'lstm_hid50_emb100_synthetic_min1_max6_skip1_train_pred.arff'
     val_data = 'lstm_hid50_emb100_synthetic_min1_max6_skip1_val_pred.arff'
-    test_data = 'lstm_hid50_emb100_synthetic_min1_max6_skip1_test_pred.arff'
+    test_data = 'lstm_hid50_emb100_synthetic_min1_masx6_skip1_test_pred.arff'
     data_dir = '../../out/weka/'
 
     out_fname = classifier +'_'+ train_data.strip('.arff') + '.model'
     dir_out = '../../out/weka/'
-    induce_explanations(classifier, optimize, val_data, val_data, test_data, data_dir, out_fname, dir_out )
+    induce_explanations(classifier, optimize, train_data, val_data, test_data, data_dir, out_fname, dir_out )
