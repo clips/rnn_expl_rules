@@ -12,15 +12,15 @@ from src.utils import FileUtils
 from src.weka_utils.vec_to_arff import get_feat_dict, write_arff_file
 
 import torch
-from os.path import exists, realpath, join
-from os import makedirs
 from sklearn.metrics import f1_score
-
 import numpy as np
 
+from os.path import exists, realpath, join
+from os import makedirs
 import resource
-soft, hard = 5.4e+10, 5.4e+10 #nearly 50GB
-resource.setrlimit(resource.RLIMIT_AS,(soft, hard))
+
+soft, hard = 5.4e+10, 5.4e+10  # nearly 50GB
+resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
 
 
 def main():
@@ -40,14 +40,14 @@ def main():
     else:
         train_split, val_split, test_split = DataUtils.read_splits(dir_splits)
 
-    #initialize corpora
+    # initialize corpora
     train_corp = Corpus(dir_corpus, f_labels, dir_labels, train_split)
     val_corp = Corpus(dir_corpus, f_labels, dir_labels, val_split)
     test_corp = Corpus(dir_corpus, f_labels, dir_labels, test_split)
 
     # train_model = True
     train_model = False
-    model_name = 'lstm' #lstm|gru
+    model_name = 'lstm' # lstm|gru
 
     load_encoder = True
     fname_encoder = 'corpus_encoder.json'
@@ -93,7 +93,7 @@ def main():
         classifier.save(f_model=model_name+'_classifier_hid'+str(net_params['hidden_dim'])+'_emb'+str(net_params['embedding_dim'])+'.tar')
 
     else:
-        #load model
+        # load model
         if model_name == 'lstm':
             classifier= LSTMClassifier.load(f_model='lstm_classifier_hid100_emb100.tar')
         elif model_name == 'gru':
@@ -101,7 +101,7 @@ def main():
         else:
             raise ValueError("Model should be either 'gru' or 'lstm'")
 
-    test_mode = 'test' #val | test
+    test_mode = 'test' # val | test
     if test_mode == 'val':
         eval_corp = val_corp
     elif test_mode == 'test':
@@ -111,19 +111,17 @@ def main():
 
     print("Testing on {} data".format(test_mode))
 
-    #get predictions
+    # get predictions
     y_pred, y_true = classifier.predict(eval_corp, corpus_encoder)
 
-    #compute scoring metrics
+    # compute scoring metrics
     print(f1_score(y_true=y_true, y_pred=y_pred, average='macro'))
-
 
     # populating weka files for interpretability
     clamp_obj = Clamp(dir_clamp)
     train_sg, train_sg_bag = get_sg_bag(clamp_obj, train_corp, classifier, corpus_encoder, model_name, 'train')
     val_sg, val_sg_bag = get_sg_bag(clamp_obj, val_corp, classifier, corpus_encoder, model_name, 'val', train_sg.vocab)
     test_sg, test_sg_bag = get_sg_bag(clamp_obj, test_corp, classifier, corpus_encoder, model_name, 'test', train_sg.vocab)
-
 
 
 def get_sg_bag(clamp_obj, eval_corp, classifier, encoder, model_name, subset, vocab = None, search_sg_params = False):
@@ -141,7 +139,7 @@ def get_sg_bag(clamp_obj, eval_corp, classifier, encoder, model_name, subset, vo
         print("Pooling method: ", cur_method)
 
         # computing word importance scores
-        explanation = Explanation.get_grad_importance(classifier, eval_corp, encoder, cur_method, model_name)
+        explanation = Explanation.get_grad_importance(classifier, eval_corp, encoder, cur_method, model_name, subset)
         explanations[cur_method] = explanation
         # eval_obj.avg_acc_from_corpus(explanation.imp_scores, eval_corp, corpus_encoder)
 
@@ -172,6 +170,7 @@ def get_sg_bag(clamp_obj, eval_corp, classifier, encoder, model_name, subset, vo
 
     return sg, sg_bag
 
+
 def sg_param_search(seqs, scores, eval_obj):
 
     prec = dict()
@@ -197,6 +196,7 @@ def sg_param_search(seqs, scores, eval_obj):
     FileUtils.write_json(prec, 'sg_param_search.json', '../out/')
 
     return best_min_n, best_max_n, best_skip
+
 
 if __name__ == '__main__':
     main()
