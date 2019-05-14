@@ -45,13 +45,7 @@ class TorchUtils:
 
         return state
 
-    @staticmethod
-    def _set_eval(model):
-        '''
-        Switch off the training behaviour of the parameters
-        '''
-        for p in model.parameters():
-            p.train = False
+
 
 class EmbeddingMul(nn.Module):
     """This class implements a custom embedding module which registers a hook to save gradients.
