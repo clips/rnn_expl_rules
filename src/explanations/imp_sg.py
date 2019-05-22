@@ -1,27 +1,35 @@
+from src.utils import get_top_items_dict
+
 from nltk import skipgrams
 import numpy as np
 from operator import itemgetter
-from collections import Counter
+from collections import Counter, defaultdict
+from statistics import median
+# from scipy.sparse import csr_matrix
+# from sklearn.feature_selection import mutual_info_classif
+
 
 class SeqSkipGram:
 
-    def __init__(self, vocab):
+    def __init__(self, vocab, pos_th, neg_th):
         self.vocab = vocab
+        self.pos_th = pos_th
+        self.neg_th = neg_th
 
     @classmethod
-    def from_seqs(cls, seqs, scores, min_n, max_n, skip, topk, vocab = None, max_vocab_size = None):
+    def from_seqs(cls, seqs, scores, min_n, max_n, skip, topk, vocab, max_vocab_size, pos_th, neg_th):
 
-        inst = cls(vocab)
-        inst.get_sg(seqs, scores, min_n, max_n, skip, topk)
-        # inst.filter_sg(sg_seqs, sg_scores, topk)
+        inst = cls(vocab, pos_th, neg_th)
 
         if inst.vocab is None:
-            inst.populate_vocab(max_vocab_size)
+            print("Getting most important skipgrams as vocab")
+            inst.init_class(seqs, scores, min_n, max_n, skip, topk, max_vocab_size)
+
+        inst.get_sg_bag(seqs, scores, min_n, max_n, skip)
 
         return inst
 
-
-    def get_sg(self, seqs, scores, min_n, max_n, skip, topk):
+    def init_class(self, seqs, scores, min_n, max_n, skip, topk, max_vocab_size):
         """
         Return tuple containing skip gram sequence terms and their aggregated scores
         :param seqs: list of list of sequences
@@ -32,37 +40,33 @@ class SeqSkipGram:
         :param topk: number of top skipgrams in every instance to retain
         """
 
-        top_sg_seqs, top_sg_scores = list(), list()
+        top_sg_seqs,  top_sg_scores = list(), list()
         for cur_seq, cur_score in zip(seqs, scores):
-            cur_inst_sg_seqs, cur_inst_scores = list(), list()
-            for n in range(min_n, max_n+1):
-                if not n:
-                    continue
-                if n == 1:
-                    cur_inst_sg_seqs.extend(cur_seq)
-                    cur_inst_scores.extend(cur_score)
-                    continue
-
-                cur_inst_sg_seqs.extend([' '.join(sg) for sg in skipgrams(cur_seq, n=n, k=skip)])
-                cur_inst_scores.extend([np.mean(sg) for sg in skipgrams(cur_score, n=n, k=skip)])
-
-            cur_top_sg_seqs, cur_top_scores = self.get_top_sg(cur_inst_sg_seqs, cur_inst_scores, topk)
-
-            # removing skipgrams not in vocab if we already have a vocab (for val and test cases)
-            # may not be needed if we filter later before creating a bag rep
-            # if self.vocab is not None:
-            #     for cur_sg, cur_score in zip(cur_top_sg_seqs, cur_top_scores):
-            #         if cur_sg not in self.vocab.term2idx:
-            #             cur_top_sg_seqs.remove(cur_sg)
-            #             cur_top_scores.remove(cur_score)
-
+            cur_inst_sg_seqs, cur_inst_sg_scores = self.get_sg(cur_seq, cur_score, min_n, max_n, skip)
+            cur_top_sg_seqs, cur_top_sg_scores = self.get_top_sg(cur_inst_sg_seqs, cur_inst_sg_scores, topk)
             top_sg_seqs.append(cur_top_sg_seqs)
-            top_sg_scores.append(cur_top_scores)
+            top_sg_scores.append(cur_top_sg_scores)
 
-        self.top_sg_seqs = top_sg_seqs
-        self.top_sg_scores = top_sg_scores
+        self.populate_vocab(top_sg_seqs, top_sg_scores, max_vocab_size)
+        self.pos_th = median([j for i in top_sg_scores for j in i if j > 0.])
+        self.neg_th = median([j for i in top_sg_scores for j in i if j < 0.])
 
-    def get_top_sg(self, sg_seq, sg_score, k):
+    def get_sg(self, seqs, scores, min_n, max_n, skip):
+        cur_inst_sg_seqs, cur_inst_sg_scores = list(), list()
+        for n in range(min_n, max_n + 1):
+            if not n:
+                continue
+            if n == 1:
+                cur_inst_sg_seqs.extend(seqs)
+                cur_inst_sg_scores.extend(scores)
+                continue
+
+            cur_inst_sg_seqs.extend([' '.join(sg) for sg in skipgrams(seqs, n=n, k=skip)])
+            cur_inst_sg_scores.extend([np.mean(sg) for sg in skipgrams(scores, n=n, k=skip)])
+
+        return cur_inst_sg_seqs, cur_inst_sg_scores
+
+    def get_top_sg(self, seqs, scores, k):
         """
         Get the top k skipgrams for a given instance and their corresponding importance scores
         :param sg_seqs: skipgram sequences for a given instance
@@ -74,71 +78,125 @@ class SeqSkipGram:
         # taking a subset of -k elements give us the last k indices of elements to sort it.
         # reversing the indices of the last k elements, we get the index order to sort array in descending order.
         # using absolute scores to get top features; ignoring direction of effect
-        idx = np.argsort(abs(np.array(sg_score)))[-k:][::-1]
+        idx = np.argsort(abs(np.array(scores)))[-k:][::-1]
+        top_seqs = list(itemgetter(*idx)(seqs))
+        top_scores = list(itemgetter(*idx)(scores))
+        return top_seqs, top_scores
 
-        top_seqs = list(itemgetter(*idx)(sg_seq))
-        top_sg_scores = list(itemgetter(*idx)(sg_score))
+    def populate_vocab(self, sg_seqs, sg_scores, max_vocab_size):
+        self.vocab = SkipGramVocab.create_vocab(sg_seqs, sg_scores, max_vocab_size)
 
-        return top_seqs, top_sg_scores
+    def get_sg_bag(self, seqs, scores, min_n, max_n, skip, simplify='discretize'):
 
-    def populate_vocab(self, max_vocab_size):
-        self.vocab = SkipGramVocab.create_vocab(self.top_sg_seqs, max_vocab_size)
+        np.seterr(over='raise', under='raise')
 
-    def seq_to_sg_bag(self):
+        sg_bag = np.zeros(shape=(len(seqs), len(self.vocab)), dtype=np.float128)  # 64 bit causes underflow
 
-        sg_bag = np.zeros(shape = (len(self.top_sg_seqs), len(self.vocab)))
+        try:
+            for i, (cur_seq, cur_score) in enumerate(zip(seqs, scores)):
+                cur_inst_sg_seqs, cur_inst_sg_scores = self.get_sg(cur_seq, cur_score, min_n, max_n, skip)
+                for sg, score in zip(cur_inst_sg_seqs, cur_inst_sg_scores):
+                    if sg in self.vocab.term2idx:
+                        # @todo: check if addition of importance is ideal for repeated skipgrams, if any
+                        sg_bag[i, self.vocab.term2idx[sg]] += score
+        except FloatingPointError as err:
+            print(err)
 
-        for i, (cur_seq, cur_scores) in enumerate(zip(self.top_sg_seqs, self.top_sg_scores)):
-            #@todo: check if addition of importance is ideal for repeated skipgrams, if any
-            for sg, score in zip(cur_seq, cur_scores):
-                if sg in self.vocab.term2idx:
-                    sg_bag[i, self.vocab.term2idx[sg]] += score
+        if simplify == 'sign':
+            # convert to ternary values
+            sg_bag = np.sign(sg_bag).astype('int')
+        elif simplify == 'discretize':  # discretize scores into 5 bins
+            for i, row in enumerate(sg_bag):
+                for j, elt in enumerate(row):
+                    if elt < self.neg_th:
+                        sg_bag[i, j] = -2
+                    elif self.neg_th <= elt < 0:
+                        sg_bag[i, j] = -1
+                    elif self.pos_th > elt > 0:
+                        sg_bag[i, j] = 1
+                    elif elt >= self.pos_th:
+                        sg_bag[i, j] = 2
 
-        return sg_bag
+            sg_bag = sg_bag.astype('int')
+
+        self.sg_bag = sg_bag
+
 
 class SkipGramVocab:
 
     def __init__(self):
         self.term2idx = dict()
         self.idx2word = dict()
-        self.term2freq = dict()
 
     @classmethod
-    def create_vocab(cls, sg_seqs, max_vocab_size = None):
+    def create_vocab(cls, seqs, scores=None, max_vocab_size=None, vocab_filter='kbest'):
         """
         Construct vocabulary from the top scoring sequence skipgrams
-        :param sg_seqs: top scoring sequence skipgrams, 2D list n_inst * n_top_sg
+        :param seqs: top scoring sequence skipgrams, 2D list n_inst * n_top_sg
+        :param scores: scores of all skipgrams, 2D list n_inst * n_top_sg
         :param max_vocab_size: Maximum number of vocab elements to keep
+        :param vocab_filter: which filter to use for reducing vocabulary size
         :return: an object with a dictionary mapping terms to vocab indices,
                                 a dictionary mapping vocab indices to terms,
                                 a dictionary mapping vocab terms to their instance frequency
         """
-        term2freq = Counter(x for xs in sg_seqs for x in set(xs))  # number of instances the term occurs in
-        print("Vocab size: ", len(term2freq))
-
-        if max_vocab_size is not None:
-            print("Keeping top {} vocab items only".format(max_vocab_size))
-            term2freq = dict(term2freq.most_common(max_vocab_size)) #frequency filter. @todo: filter per class instead?
-        else:
-            term2freq = dict(term2freq)
-
-        term2idx = dict()
-
-        for seq in sg_seqs:
-            for term in seq:
-                if term in term2freq:
-                    term2idx.setdefault(term, len(term2idx))
-
-        idx2word = {value:key for key, value in term2idx.items()}
 
         inst = cls()
-        inst.term2idx = term2idx
-        inst.idx2word = idx2word
-        inst.term2freq = term2freq
 
-        # print("Vocab size:", len(inst))
+        vocab_set = inst._reduce_vocab_size(seqs, scores, max_vocab_size, vocab_filter)
+
+        term2idx = dict()
+        for term in vocab_set:
+            term2idx.setdefault(term, len(term2idx))
+
+        idx2term = {value: key for key, value in term2idx.items()}
+
+        inst.term2idx = term2idx
+        inst.idx2word = idx2term
 
         return inst
+
+    def _reduce_vocab_size(self, seqs, scores, max_vocab_size, vocab_filter):
+
+        if max_vocab_size is not None:
+
+            print("Keeping top {} vocab items only".format(max_vocab_size))
+
+            if vocab_filter == 'freq':
+                term2freq = Counter(x for xs in seqs for x in set(xs))  # number of instances the term occurs in
+                print("Original vocab size: ", len(term2freq))
+                print("Selecting most frequent top skipgrams")
+                vocab_set = dict(term2freq.most_common(max_vocab_size)).keys()  # frequency filter.
+
+            elif vocab_filter == 'kbest':
+                print("Selecting most contributing top skipgrams")
+                term2score = defaultdict(float)  # records total importance of sg in dataset
+                for cur_seq, cur_scores in zip(seqs, scores):
+                    for cur_term, cur_score in zip(cur_seq, cur_scores):
+                        term2score[cur_term] += abs(cur_score)  # using absolute values and ignoring sign
+                term2score.default_factory = None  # turn off default behaviour of defaultdict
+                vocab_set = get_top_items_dict(term2score, max_vocab_size, order=False).keys()
+
+            # elif vocab_filter == 'mi':
+            #     term2idx = {term: i for i, term in enumerate(term2freq.keys())}
+            #
+            #     rows = list()
+            #     cols = list()
+            #     data = list()
+            #     for i, row in enumerate(seqs):
+            #         for j, term in enumerate(row):
+            #             rows.append(i)
+            #             cols.append(term2idx[term])
+            #             data.append(scores[i, j])
+            #
+            #     sparse_matrix = csr_matrix((data, (rows, cols)), shape=(len(seqs), len(term2idx)))
+            #
+            #     mutual_info_classif(sparse_matrix, preds)
+
+        else:
+            vocab_set = {x for xs in seqs for x in xs}
+
+        return vocab_set
 
     def __len__(self):
         return len(self.term2idx)

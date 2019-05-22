@@ -31,7 +31,7 @@ def main():
     # dir_labels = '/home/madhumita/dataset/sepsis_synthetic/labels/'
     dir_labels = '/home/madhumita/sepsis_synthetic/labels/'
 
-    #get train, val, test splits
+    # get train, val, test splits
     create_split = False
     # dir_splits = '/home/madhumita/dataset/sepsis_synthetic/splits/'
     dir_splits = '/home/madhumita/sepsis_synthetic/splits/'
@@ -47,7 +47,7 @@ def main():
 
     # train_model = True
     train_model = False
-    model_name = 'lstm' # lstm|gru
+    model_name = 'lstm'  # lstm|gru
 
     load_encoder = True
     fname_encoder = 'corpus_encoder.json'
@@ -95,9 +95,9 @@ def main():
     else:
         # load model
         if model_name == 'lstm':
-            classifier= LSTMClassifier.load(f_model='lstm_classifier_hid100_emb100.tar')
+            classifier = LSTMClassifier.load(f_model='lstm_classifier_hid50_emb100.tar')
         elif model_name == 'gru':
-            classifier= GRUClassifier.load(f_model='gru_classifier_hid50_emb100.tar')
+            classifier = GRUClassifier.load(f_model='gru_classifier_hid50_emb100.tar')
         else:
             raise ValueError("Model should be either 'gru' or 'lstm'")
 
@@ -119,12 +119,15 @@ def main():
 
     # populating weka files for interpretability
     clamp_obj = Clamp(dir_clamp)
-    train_sg, train_sg_bag = get_sg_bag(clamp_obj, train_corp, classifier, corpus_encoder, model_name, 'train')
-    val_sg, val_sg_bag = get_sg_bag(clamp_obj, val_corp, classifier, corpus_encoder, model_name, 'val', train_sg.vocab)
-    test_sg, test_sg_bag = get_sg_bag(clamp_obj, test_corp, classifier, corpus_encoder, model_name, 'test', train_sg.vocab)
+    train_sg = get_sg_bag(clamp_obj, train_corp, classifier, corpus_encoder, model_name, 'train')
+    val_sg = get_sg_bag(clamp_obj, val_corp, classifier, corpus_encoder, model_name, 'val',
+                        vocab=train_sg.vocab, pos_th=train_sg.pos_th, neg_th=train_sg.neg_th)
+    test_sg = get_sg_bag(clamp_obj, test_corp, classifier, corpus_encoder, model_name, 'test',
+                         vocab=train_sg.vocab, pos_th=train_sg.pos_th, neg_th=train_sg.neg_th)
 
 
-def get_sg_bag(clamp_obj, eval_corp, classifier, encoder, model_name, subset, vocab = None, search_sg_params = False):
+def get_sg_bag(clamp_obj, eval_corp, classifier, encoder, model_name, subset, topk=50,
+               vocab=None, max_vocab_size=5000, pos_th=0., neg_th=0., search_sg_params=False):
 
     print("Getting top skipgrams for subset {}".format(subset))
 
@@ -150,25 +153,19 @@ def get_sg_bag(clamp_obj, eval_corp, classifier, encoder, model_name, subset, vo
         # search over best min_n, max_n and skip parameters
         min_n, max_n, skip = sg_param_search(seqs, explanations['dot'].imp_scores, eval_obj)
     else:
-        min_n, max_n, skip = 1, 6, 1
+        min_n, max_n, skip = 1, 4, 2
 
     sg = SeqSkipGram.from_seqs(seqs, explanations['dot'].imp_scores, min_n=min_n, max_n=max_n, skip=skip,
-                               topk=50, vocab = vocab, max_vocab_size=5000)
-
-    # create bow from sg seqs
-    sg_bag = sg.seq_to_sg_bag()
-
-    # convert to ternary values
-    sg_bag = np.sign(sg_bag).astype('int')
+                               topk=topk, vocab=vocab, max_vocab_size=max_vocab_size, pos_th=pos_th, neg_th=neg_th)
 
     # write as arff file
-    feat_dict = get_feat_dict(sg.vocab.term2idx, vec_type='signed')
+    feat_dict = get_feat_dict(sg.vocab.term2idx, vec_type='discretized')
     rel_name = model_name + '_hid' + str(classifier.hidden_dim) + '_emb' + str(classifier.emb_dim) + '_synthetic' \
                + '_min' + str(min_n) + '_max' + str(max_n) + '_skip' + str(skip) + '_'
-    write_arff_file(rel_name, feat_dict, eval_corp.label_encoder.classes_, sg_bag, eval_corp.labels, '../out/weka/',
+    write_arff_file(rel_name, feat_dict, eval_corp.label_encoder.classes_, sg.sg_bag, eval_corp.labels, '../out/weka/',
                     rel_name + subset + '_pred.arff')
 
-    return sg, sg_bag
+    return sg
 
 
 def sg_param_search(seqs, scores, eval_obj):
