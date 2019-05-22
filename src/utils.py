@@ -1,6 +1,7 @@
 from os.path import exists, join, realpath
 from os import makedirs
 import json
+from collections import OrderedDict
 
 class FileUtils:
     @staticmethod
@@ -36,3 +37,13 @@ class FileUtils:
                 data.append(line.strip())
 
         return data
+
+
+def get_top_items_dict(data_dict, k, order=False):
+    """Get top k items in the dictionary by score.
+    Returns a dictionary or an `OrderedDict` if `order` is true.
+    """
+    top = sorted(data_dict.items(), key=lambda x: x[1], reverse=True)[:k]
+    if order:
+        return OrderedDict(top)
+    return dict(top)
