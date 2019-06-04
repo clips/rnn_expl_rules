@@ -48,8 +48,10 @@ class SeqSkipGram:
             top_sg_scores.append(cur_top_sg_scores)
 
         self.populate_vocab(top_sg_seqs, top_sg_scores, max_vocab_size)
-        self.pos_th = median([j for i in top_sg_scores for j in i if j > 0.])
-        self.neg_th = median([j for i in top_sg_scores for j in i if j < 0.])
+
+        # use minimum/median as threshold. Doesn't seem to make any difference for the output.
+        self.pos_th = min([j for i in top_sg_scores for j in i if j > 0.])
+        self.neg_th = min([j for i in top_sg_scores for j in i if j < 0.])
 
     def get_sg(self, seqs, scores, min_n, max_n, skip):
         cur_inst_sg_seqs, cur_inst_sg_scores = list(), list()
@@ -135,7 +137,7 @@ class SkipGramVocab:
         :param seqs: top scoring sequence skipgrams, 2D list n_inst * n_top_sg
         :param scores: scores of all skipgrams, 2D list n_inst * n_top_sg
         :param max_vocab_size: Maximum number of vocab elements to keep
-        :param vocab_filter: which filter to use for reducing vocabulary size
+        :param vocab_filter: which filter to use for reducing vocabulary size (freq|kbest)
         :return: an object with a dictionary mapping terms to vocab indices,
                                 a dictionary mapping vocab indices to terms,
                                 a dictionary mapping vocab terms to their instance frequency
