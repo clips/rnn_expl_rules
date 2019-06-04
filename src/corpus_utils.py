@@ -6,7 +6,6 @@ from sklearn.model_selection import train_test_split
 import torch
 from os.path import realpath, join
 import json
-from nltk.util import skipgrams
 
 #beginning of seq, end of seq, beg of line, end of line, unknown, padding symbol
 BOS, EOS, BOL, EOL, UNK, PAD = '<s>', '</s>', '<bol>', '</bol>', '<unk>', '<pad>'
@@ -36,7 +35,6 @@ class Vocab:
         inst.idx2word = {val: key for key, val in inst.word2idx.items()}
 
         return inst
-
 
     def __getitem__(self, item):
         return self.word2idx[item]
@@ -193,9 +191,6 @@ class CorpusEncoder:
             labels = None
 
         return t, labels, lengths
-
-    # def inst_to_tensor(self, cur_inst, device):
-    #     return torch.LongTensor(cur_inst).to(device)
 
     def decode_inst(self, inst):
         out = [self.vocab.idx2word[i] for i in inst if i != self.vocab.pad]
