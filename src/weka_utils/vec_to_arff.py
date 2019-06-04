@@ -17,7 +17,7 @@ def get_feat_dict(vocab_dict, vec_type):
 
     if vec_type in ['tf', 'tf-idf']:
         data_type = _get_cont_dtype(vec_type)
-    elif vec_type in ['signed']:
+    elif vec_type in ['signed', 'discretized']:
         data_type = _get_discrete_type(vec_type)
 
     return {i:data_type for i in feat_list}
@@ -82,7 +82,7 @@ def _get_discrete_type(vec_type):
     :return: string representing all values of a feature type
     '''
     # print("Getting feature types")
-    type_dict = {'signed': ['-1', '0', '1']}
+    type_dict = {'signed': ['-1', '0', '1'], 'discretized':['-2', '-1', '0', '1', '2']}
 
     try:
         return type_dict[vec_type]
