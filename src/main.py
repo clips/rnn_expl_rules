@@ -95,13 +95,13 @@ def main():
     else:
         # load model
         if model_name == 'lstm':
-            classifier = LSTMClassifier.load(f_model='lstm_classifier_hid50_emb100.tar')
+            classifier = LSTMClassifier.load(f_model='lstm_classifier_hid100_emb100.tar')
         elif model_name == 'gru':
-            classifier = GRUClassifier.load(f_model='gru_classifier_hid50_emb100.tar')
+            classifier = GRUClassifier.load(f_model='gru_classifier_hid50_emb50.tar')
         else:
             raise ValueError("Model should be either 'gru' or 'lstm'")
 
-    test_mode = 'test' # val | test
+    test_mode = 'test'  # val | test
     if test_mode == 'val':
         eval_corp = val_corp
     elif test_mode == 'test':
@@ -131,7 +131,10 @@ def get_sg_bag(clamp_obj, eval_corp, classifier, encoder, model_name, subset, to
 
     print("Getting top skipgrams for subset {}".format(subset))
 
+    y_pred, __ = classifier.predict(eval_corp, encoder)
+
     eval_obj = InterpretabilityEval(eval_corp, clamp_obj)
+
 
     # methods = ['l2', 'sum', 'max', 'dot', 'max_mul']
     methods = ['dot']
@@ -162,7 +165,7 @@ def get_sg_bag(clamp_obj, eval_corp, classifier, encoder, model_name, subset, to
     feat_dict = get_feat_dict(sg.vocab.term2idx, vec_type='discretized')
     rel_name = model_name + '_hid' + str(classifier.hidden_dim) + '_emb' + str(classifier.emb_dim) + '_synthetic' \
                + '_min' + str(min_n) + '_max' + str(max_n) + '_skip' + str(skip) + '_'
-    write_arff_file(rel_name, feat_dict, eval_corp.label_encoder.classes_, sg.sg_bag, eval_corp.labels, '../out/weka/',
+    write_arff_file(rel_name, feat_dict, eval_corp.label_encoder.classes_, sg.sg_bag, y_pred, '../out/weka/',
                     rel_name + subset + '_pred.arff')
 
     return sg
