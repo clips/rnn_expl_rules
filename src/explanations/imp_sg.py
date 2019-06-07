@@ -4,10 +4,6 @@ from nltk import skipgrams
 import numpy as np
 from operator import itemgetter
 from collections import Counter, defaultdict
-from statistics import median
-# from scipy.sparse import csr_matrix
-# from sklearn.feature_selection import mutual_info_classif
-
 
 class SeqSkipGram:
 
@@ -26,6 +22,8 @@ class SeqSkipGram:
             inst.init_class(seqs, scores, min_n, max_n, skip, topk, max_vocab_size)
 
         inst.get_sg_bag(seqs, scores, min_n, max_n, skip)
+
+        print("pos neg th", inst.pos_th, inst.neg_th)
 
         return inst
 
@@ -49,11 +47,20 @@ class SeqSkipGram:
 
         self.populate_vocab(top_sg_seqs, top_sg_scores, max_vocab_size)
 
-        # use minimum/median as threshold. Doesn't seem to make any difference for the output.
+        # use minimum imp of top skipgrams as threshold.
         self.pos_th = min([j for i in top_sg_scores for j in i if j > 0.])
         self.neg_th = min([j for i in top_sg_scores for j in i if j < 0.])
 
     def get_sg(self, seqs, scores, min_n, max_n, skip):
+        """
+        Return all skipgrams of seqs and scores of length [min_n, max_n] with max number of skip tokens/=
+        :param seqs: token sequences 2D list or similar
+        :param scores: imp score sequences 2D list or similar
+        :param min_n: minimum skipgram length
+        :param max_n: max skipgram length (inclusive)
+        :param skip: max number of tokens to skip
+        :return: 2D list of skipgrams of seqs and scores (n_inst * n_sg)
+        """
         cur_inst_sg_seqs, cur_inst_sg_scores = list(), list()
         for n in range(min_n, max_n + 1):
             if not n:
@@ -106,23 +113,34 @@ class SeqSkipGram:
 
         if simplify == 'sign':
             # convert to ternary values
-            sg_bag = np.sign(sg_bag).astype('int')
+            sg_bag = np.sign(sg_bag)
         elif simplify == 'discretize':  # discretize scores into 5 bins
-            for i, row in enumerate(sg_bag):
-                for j, elt in enumerate(row):
-                    if elt < self.neg_th:
-                        sg_bag[i, j] = -2
-                    elif self.neg_th <= elt < 0:
-                        sg_bag[i, j] = -1
-                    elif self.pos_th > elt > 0:
-                        sg_bag[i, j] = 1
-                    elif elt >= self.pos_th:
-                        sg_bag[i, j] = 2
+            sg_bag = self.discretize_imp(sg_bag)
 
-            sg_bag = sg_bag.astype('int')
+        sg_bag = sg_bag.astype('int')
 
         self.sg_bag = sg_bag
 
+    def discretize_imp(self, sg_bag):
+        """
+        Convert importance scores into discrete values -2, -1, 0, 1 and 2.
+        -2 and 2 represent high negative and positive importance respectively.
+        -1 and 1 represent low negative and postive importance respectively.
+        :param sg_bag: 2D array with importance scores (n_inst * sg_vocab_size)
+        :return: Discretized skipgram bag
+        """
+        for i, row in enumerate(sg_bag):
+            for j, elt in enumerate(row):
+                if elt < self.neg_th:
+                    sg_bag[i, j] = -2
+                elif self.neg_th <= elt < 0:
+                    sg_bag[i, j] = -1
+                elif self.pos_th > elt > 0:
+                    sg_bag[i, j] = 1
+                elif elt >= self.pos_th:
+                    sg_bag[i, j] = 2
+
+        return sg_bag
 
 class SkipGramVocab:
 
@@ -178,22 +196,6 @@ class SkipGramVocab:
                         term2score[cur_term] += abs(cur_score)  # using absolute values and ignoring sign
                 term2score.default_factory = None  # turn off default behaviour of defaultdict
                 vocab_set = get_top_items_dict(term2score, max_vocab_size, order=False).keys()
-
-            # elif vocab_filter == 'mi':
-            #     term2idx = {term: i for i, term in enumerate(term2freq.keys())}
-            #
-            #     rows = list()
-            #     cols = list()
-            #     data = list()
-            #     for i, row in enumerate(seqs):
-            #         for j, term in enumerate(row):
-            #             rows.append(i)
-            #             cols.append(term2idx[term])
-            #             data.append(scores[i, j])
-            #
-            #     sparse_matrix = csr_matrix((data, (rows, cols)), shape=(len(seqs), len(term2idx)))
-            #
-            #     mutual_info_classif(sparse_matrix, preds)
 
         else:
             vocab_set = {x for xs in seqs for x in xs}
