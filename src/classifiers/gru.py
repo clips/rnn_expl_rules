@@ -15,6 +15,8 @@ class GRUClassifier(nn.Module):
 
         super(GRUClassifier, self).__init__()
 
+        self.model_type = 'gru'
+
         self.n_gru_layers = n_layers
         self.hidden_dim = hidden_dim
         self.vocab_size = vocab_size
@@ -24,7 +26,7 @@ class GRUClassifier(nn.Module):
         self.n_labels = label_size
 
         if torch.cuda.is_available():
-            self.device = torch.device('cuda:1')
+            self.device = torch.device('cuda:0')
         else:
             self.device = torch.device('cpu')
 
@@ -40,9 +42,9 @@ class GRUClassifier(nn.Module):
         self.to(self.device)
 
     def init_hidden(self):
-        '''
+        """
         initializes hidden and cell states to zero for the first input
-        '''
+        """
         h0 = torch.zeros(self.n_gru_layers, self.batch_size, self.hidden_dim).to(self.device)
         return h0
 
@@ -81,8 +83,8 @@ class GRUClassifier(nn.Module):
         return y
 
     def loss(self, fwd_out, target):
-        #NLL loss to be used when logits have log-softmax output.
-        #If softmax layer is not added, directly CrossEntropyLoss can be used.
+        # NLL loss to be used when logits have log-softmax output.
+        # If softmax layer is not added, directly CrossEntropyLoss can be used.
         loss_fn = nn.NLLLoss()
         return loss_fn(fwd_out, target)
 
@@ -95,12 +97,12 @@ class GRUClassifier(nn.Module):
         for i in range(n_epochs):
             running_loss = 0.0
 
-            #shuffle the corpus
+            # shuffle the corpus
             combined = list(zip(corpus.fname_subset, corpus.labels))
             shuffle(combined)
             corpus.fname_subset, corpus.labels = zip(*combined)
 
-            #get train batch
+            # get train batch
             for idx, (cur_insts, cur_labels) in enumerate(corpus_encoder.get_batches_from_corpus(corpus, self.batch_size)):
                 cur_insts, cur_labels, cur_lengths = corpus_encoder.batch_to_tensors(cur_insts, cur_labels, self.device)
 
@@ -115,7 +117,7 @@ class GRUClassifier(nn.Module):
                 loss.backward()  # compute gradients for network params w.r.t loss
                 optimizer.step()  # perform the gradient update step
 
-                #detach hidden nodes from the graph. IMP to prevent the graph from growing.
+                # detach hidden nodes from the graph. IMP to prevent the graph from growing.
                 self.detach_hidden_()
 
                 # print statistics
@@ -146,17 +148,16 @@ class GRUClassifier(nn.Module):
             __, cur_preds = torch.max(fwd_out.detach(), 1)  # first return value is the max value, second is argmax
             y_pred.extend(cur_preds.cpu().numpy())
 
-
         return y_pred, y_true
 
     def predict_from_insts(self, texts, encoder, get_prob = False):
-        '''
+        """
         :param texts: 2D list, n_inst * n_words for every instance
         :param encoder: corpus encoder object
         :param get_prob: True to get probability output
         :param batch_size: num_inst per batch for the model
         :return: output prediction -- class/prob
-        '''
+        """
         self.eval()
 
         preds = list()
@@ -211,9 +212,9 @@ class GRUClassifier(nn.Module):
         return classifier
 
     def get_importance(self, corpus, corpus_encoder, eval_obj):
-        '''
+        """
         Compute word importance scores based on backpropagated gradients
-        '''
+        """
 
         # methods = ['dot', 'sum', 'max', 'l2', 'max_mul', 'l2_mul', 'mod_dot']
         methods = ['dot']
@@ -230,13 +231,14 @@ class GRUClassifier(nn.Module):
 
         return explanations
 
+
 if __name__ == '__main__':
     gru = GRUClassifier(2, 100, 50, 50, 0.5, 2, 2)
 
-    #variable length sequences
+    # variable length sequences
     X0 = torch.LongTensor([1, 5, 8, 19, 43])
     X1 = torch.LongTensor([23,44,5,13,1,34,43])
-    X = [X1, X0] #sequence needs to be sorted in descending order of length
+    X = [X1, X0] # sequence needs to be sorted in descending order of length
 
     X_padded = nn.utils.rnn.pad_sequence(X, batch_first=True)
     # print(X_padded)

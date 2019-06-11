@@ -8,30 +8,30 @@ import numpy as np
 class Explanation:
     """
     Base class for all explanations.
-    Parameters: model, data, and explanation?
+    Parameters: model, data, technique, explanation
     """
-    def __init__(self, method):
+    def __init__(self, method, model, corpus, encoder, imp_scores, preds):
         self.method = method
-        # save explanations in attribute imp_scores later
+        self.model = model
+        self.corpus = corpus
+        self.corpus_encoder = encoder
+        self.preds = preds  #@todo: shall we move this to model?
+        self.imp_scores = imp_scores
 
     @classmethod
-    def get_grad_importance(cls, model, corpus, corpus_encoder, grad_pooling, model_type, data_subset):
-        '''
+    def get_grad_importance(cls, model, corpus, corpus_encoder, grad_pooling):
+        """
         Compute word importance scores based on backpropagated gradients
         :param model: model to compute importance scores for
         :param corpus: corpus to explain
         :param corpus_encoder: encoder used for the given corpus
         :param grad_pooling: (dot|sum|max|l2|max_mul|l2_mul)
                               pooling technique for combining embedding dimension importance into word importance
-        :param model_type: gru/lstm
-        :param data_subset: which data subset are the importance scores for
-        '''
+        """
         grad_pooling = grad_pooling.lower()
 
         if grad_pooling not in {'dot', 'sum', 'max', 'l2', 'max_mul', 'l2_mul', 'mod_dot'}:
             raise ValueError("Enter a supported pooling technique (dot|sum|max|l2|max_mul|l2_mul|mod_dot)")
-
-        inst = cls('grad_' + grad_pooling)
 
         model.eval()
         # IMP! backward doesnt work in eval mode unless we disable cudnn
@@ -41,7 +41,6 @@ class Explanation:
         model.word_embeddings.requires_emb_grad = True
 
         global_imp_lst = list()
-        gold_lst = list()
         pred_lst = list()
 
         for idx, (cur_insts, cur_labels) in enumerate(corpus_encoder.get_batches_from_corpus(corpus, model.batch_size)):
@@ -75,38 +74,51 @@ class Explanation:
             # keeping the importance of valid timesteps only
             for row, cols in enumerate(cur_lengths):
                 global_imp_lst.append(word_imp[row, :cols].tolist())
-            # global_imp_lst.extend(word_imp.tolist())
 
             # recording gold and predicted labels for saving the JSON file later
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                cur_labels = corpus.label_encoder.inverse_transform(cur_labels.tolist())
                 preds = corpus.label_encoder.inverse_transform(preds.tolist())
-            gold_lst.extend(cur_labels)
             pred_lst.extend(preds)
 
-        inst.imp_scores = global_imp_lst
+        inst = cls('grad_' + grad_pooling, model, corpus, corpus_encoder, global_imp_lst, preds)
 
-        seq_lst = corpus_encoder.get_decoded_sequences(corpus, strip_angular=True)
-
-        inst.save(global_imp_lst, seq_lst, pred_lst, gold_lst,
-                  fname = 'imp_scores_' +
-                          model_type +
-                          '_hid' + str(model.hidden_dim) +
-                          '_emb' + str(model.emb_dim) +
-                          '_' + data_subset +
-                          '_' + grad_pooling + '.json'
-                 )
+        inst.save(fname='imp_scores_' +
+                        model.model_type +
+                        '_hid' + str(model.hidden_dim) +
+                        '_emb' + str(model.emb_dim) +
+                        '_' + corpus.subset_name +
+                        '_' + grad_pooling + '.json'
+                  )
         return inst
 
-    def save(self, imp_scores, seqs, preds, golds, fname, dir_out='../out/'):
+    def save(self, fname, dir_out='../out/'):
+
+        seqs = self.corpus_encoder.get_decoded_sequences(self.corpus, strip_angular=True)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            golds = self.corpus.label_encoder.inverse_transform(self.corpus.labels)
+            print("gold labels, ", golds)
+
         # saving the sequences, the importance scores, and the gold and predicted labels as JSON file
         FileUtils.write_json(
             {'seq_lst': seqs,
-             'imp_scores': imp_scores,
+             'imp_scores': self.imp_scores,
              'gold': golds,
-             'pred': preds},
+             'pred': self.preds},
             fname, dir_out)
+
+    @classmethod
+    def from_imp(cls, pooling, model, corpus, encoder, dir_in='../out/'):
+
+        fname = 'imp_scores_' + model.model_type + \
+                '_hid' + str(model.hidden_dim) + '_emb' + str(model.emb_dim) + \
+                '_' + corpus.subset_name + '_' + pooling + '.json'
+
+        json_file = FileUtils.read_json(fname, dir_in)
+
+        inst = cls(pooling, model, corpus, encoder, json_file['imp_scores'], json_file['pred'])
+        return inst
 
 
 class GradPooling:

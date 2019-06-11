@@ -41,13 +41,9 @@ def main():
         train_split, val_split, test_split = DataUtils.read_splits(dir_splits)
 
     # initialize corpora
-    train_corp = Corpus(dir_corpus, f_labels, dir_labels, train_split)
-    val_corp = Corpus(dir_corpus, f_labels, dir_labels, val_split)
-    test_corp = Corpus(dir_corpus, f_labels, dir_labels, test_split)
-
-    # train_model = True
-    train_model = False
-    model_name = 'lstm'  # lstm|gru
+    train_corp = Corpus(dir_corpus, f_labels, dir_labels, train_split,'train')
+    val_corp = Corpus(dir_corpus, f_labels, dir_labels, val_split, 'val')
+    test_corp = Corpus(dir_corpus, f_labels, dir_labels, test_split, 'test')
 
     load_encoder = True
     fname_encoder = 'corpus_encoder.json'
@@ -66,6 +62,10 @@ def main():
             makedirs(dir_encoder)
         # serialize encoder
         corpus_encoder.to_json(fname_encoder, dir_encoder)
+
+    # train_model = True
+    train_model = False
+    model_name = 'gru'  # lstm|gru
 
     if train_model:
         net_params = {'n_layers': 1,
@@ -95,9 +95,9 @@ def main():
     else:
         # load model
         if model_name == 'lstm':
-            classifier = LSTMClassifier.load(f_model='lstm_classifier_hid100_emb100.tar')
+            classifier = LSTMClassifier.load(f_model='lstm_classifier_hid50_emb50.tar')
         elif model_name == 'gru':
-            classifier = GRUClassifier.load(f_model='gru_classifier_hid50_emb50.tar')
+            classifier = GRUClassifier.load(f_model='gru_classifier_hid100_emb50.tar')
         else:
             raise ValueError("Model should be either 'gru' or 'lstm'")
 
@@ -113,7 +113,6 @@ def main():
 
     # get predictions
     y_pred, y_true = classifier.predict(eval_corp, corpus_encoder)
-
     # compute scoring metrics
     print(f1_score(y_true=y_true, y_pred=y_pred, average='macro'))
 
@@ -127,14 +126,11 @@ def main():
 
 
 def get_sg_bag(clamp_obj, eval_corp, classifier, encoder, model_name, subset, topk=50,
-               vocab=None, max_vocab_size=5000, pos_th=0., neg_th=0., search_sg_params=False):
+               vocab=None, max_vocab_size=5000, pos_th=0., neg_th=0.,
+               get_imp = False, search_sg_params=False):
 
     print("Getting top skipgrams for subset {}".format(subset))
-
-    y_pred, __ = classifier.predict(eval_corp, encoder)
-
     eval_obj = InterpretabilityEval(eval_corp, clamp_obj)
-
 
     # methods = ['l2', 'sum', 'max', 'dot', 'max_mul']
     methods = ['dot']
@@ -144,19 +140,26 @@ def get_sg_bag(clamp_obj, eval_corp, classifier, encoder, model_name, subset, to
     for cur_method in methods:
         print("Pooling method: ", cur_method)
 
-        # computing word importance scores
-        explanation = Explanation.get_grad_importance(classifier, eval_corp, encoder, cur_method, model_name, subset)
-        explanations[cur_method] = explanation
-        # eval_obj.avg_acc_from_corpus(explanation.imp_scores, eval_corp, corpus_encoder)
+        if get_imp:
+            print("Computing word importance scores")
+            # computing word importance scores
+            explanation = Explanation.get_grad_importance(classifier, eval_corp, encoder, cur_method, model_name, subset)
+            explanations[cur_method] = explanation
+            eval_obj.avg_acc_from_corpus(explanation.imp_scores, eval_corp, encoder)
+        else:
+            print("Loading word importance scores")
+            explanations[cur_method] = Explanation.from_imp(cur_method, classifier, eval_corp, encoder)
 
     # getting skipgrams
     seqs = encoder.get_decoded_sequences(eval_corp)
+    y_pred, __ = classifier.predict(eval_corp, encoder)
 
     if search_sg_params:
         # search over best min_n, max_n and skip parameters
         min_n, max_n, skip = sg_param_search(seqs, explanations['dot'].imp_scores, eval_obj)
     else:
-        min_n, max_n, skip = 1, 4, 2
+        # min_n, max_n, skip = 1, 4, 2
+        min_n, max_n, skip = 1, 1, 0
 
     sg = SeqSkipGram.from_seqs(seqs, explanations['dot'].imp_scores, min_n=min_n, max_n=max_n, skip=skip,
                                topk=topk, vocab=vocab, max_vocab_size=max_vocab_size, pos_th=pos_th, neg_th=neg_th)

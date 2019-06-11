@@ -27,7 +27,7 @@ class TorchUtils:
         if not exists(dir_state):
             makedirs(dir_state)
 
-        #serialize model state
+        # serialize model state
         torch.save(state, realpath(join(dir_state, fname_state)))
 
     @staticmethod
@@ -40,11 +40,10 @@ class TorchUtils:
         if not exists(realpath(join(dir_state, fname_state))):
             raise FileNotFoundError("Model not found")
 
-        #load model state
+        # load model state
         state = torch.load(realpath(join(dir_state, fname_state)))
 
         return state
-
 
 
 class EmbeddingMul(nn.Module):
@@ -137,17 +136,17 @@ class EmbeddingMul(nn.Module):
         return embs
 
     def save_grad(self, grad):
-        #grad shape: seq_len * batch_size * emb_dim
+        # grad shape: seq_len * batch_size * emb_dim
         self.last_grad = grad
 
     def to_embeddings(self, input):
         # Returns a new tensor that doesn't share memory
 
-        #index_select picks out the vectors corresponding to the words for every word in the input
-        #the first view makes a single dimensional sequence of input words across all instances
-        #the second view reshapes it to seq_len * batch_size * emb_dim. '+' concatenates additional dimension
+        # index_select picks out the vectors corresponding to the words for every word in the input
+        # the first view makes a single dimensional sequence of input words across all instances
+        # the second view reshapes it to seq_len * batch_size * emb_dim. '+' concatenates additional dimension
 
-        #The requires_grad parameter of result will mimic requires_grad parameter of self
+        # The requires_grad parameter of result will mimic requires_grad parameter of self
         with torch.set_grad_enabled(self.requires_grad):
             result = torch.index_select(
                 self.weight, 0, input.view(-1).long()).view(

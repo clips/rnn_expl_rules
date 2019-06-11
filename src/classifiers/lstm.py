@@ -9,11 +9,14 @@ import torch.nn.functional as F
 
 from random import shuffle
 
+
 class LSTMClassifier(nn.Module):
 
     def __init__(self, n_layers, hidden_dim, vocab_size, padding_idx, embedding_dim, dropout, label_size, batch_size):
 
         super(LSTMClassifier, self).__init__()
+
+        self.model_type = 'lstm'
 
         self.n_lstm_layers = n_layers
         self.hidden_dim = hidden_dim
@@ -37,17 +40,16 @@ class LSTMClassifier(nn.Module):
 
         self.hidden2label = nn.Linear(self.hidden_dim, self.n_labels) #hidden to output layer
 
-
         self.to(self.device)
 
     def init_hidden(self):
-        '''
+        """
         initializes hidden and cell states to zero for the first input
-        '''
+        """
         h0 = torch.zeros(self.n_lstm_layers, self.batch_size, self.hidden_dim).to(self.device)
         c0 = torch.zeros(self.n_lstm_layers, self.batch_size, self.hidden_dim).to(self.device)
 
-        return (h0, c0)
+        return h0, c0
 
     def detach_hidden_(self):
         self.hidden_in[0].detach_()
@@ -73,20 +75,21 @@ class LSTMClassifier(nn.Module):
         lstm_out, lengths = nn.utils.rnn.pad_packed_sequence(lstm_out, batch_first=False)
         # embs, __ = nn.utils.rnn.pad_packed_sequence(embs, batch_first=False)
 
-        #unsort batch
+        # unsort batch
         lstm_out = lstm_out[:, unsort]
         hidden = (hidden[0][:, unsort, :], hidden[1][:, unsort, :])
         # use the output of the last LSTM layer at the end of the last valid timestep to predict output
         # If sequence len is constant, using hidden[0] is the same as lstm_out[-1].
-        # For variable len seq, use hidden[0] for the hidden state at last valid timestep. Do it for the last hidden layer
+        # For variable len seq, use hidden[0] for the hidden state at last valid timestep.
+        # Do it for the last hidden layer
         y = self.hidden2label(hidden[0][-1])
         y = F.log_softmax(y, dim=1)
 
         return y
 
     def loss(self, fwd_out, target):
-        #NLL loss to be used when logits have log-softmax output.
-        #If softmax layer is not added, directly CrossEntropyLoss can be used.
+        # NLL loss to be used when logits have log-softmax output.
+        # If softmax layer is not added, directly CrossEntropyLoss can be used.
         loss_fn = nn.NLLLoss()
         return loss_fn(fwd_out, target)
 
@@ -99,12 +102,12 @@ class LSTMClassifier(nn.Module):
         for i in range(n_epochs):
             running_loss = 0.0
 
-            #shuffle the corpus
+            # shuffle the corpus
             combined = list(zip(corpus.fname_subset, corpus.labels))
             shuffle(combined)
             corpus.fname_subset, corpus.labels = zip(*combined)
 
-            #get train batch
+            # get train batch
             for idx, (cur_insts, cur_labels) in enumerate(corpus_encoder.get_batches_from_corpus(corpus, self.batch_size)):
                 cur_insts, cur_labels, cur_lengths = corpus_encoder.batch_to_tensors(cur_insts, cur_labels, self.device)
 
@@ -119,7 +122,7 @@ class LSTMClassifier(nn.Module):
                 loss.backward()  # compute gradients for network params w.r.t loss
                 optimizer.step()  # perform the gradient update step
 
-                #detach hidden nodes from the graph. IMP to prevent the graph from growing.
+                # detach hidden nodes from the graph. IMP to prevent the graph from growing.
                 self.detach_hidden_()
 
                 # print statistics
@@ -150,17 +153,16 @@ class LSTMClassifier(nn.Module):
             __, cur_preds = torch.max(fwd_out.detach(), 1)  # first return value is the max value, second is argmax
             y_pred.extend(cur_preds.cpu().numpy())
 
-
         return y_pred, y_true
 
     def predict_from_insts(self, texts, encoder, get_prob = False):
-        '''
+        """
         :param texts: 2D list, n_inst * n_words for every instance
         :param encoder: corpus encoder object
         :param get_prob: True to get probability output
         :param batch_size: num_inst per batch for the model
         :return: output prediction -- class/prob
-        '''
+        """
         self.eval()
 
         preds = list()
@@ -185,8 +187,7 @@ class LSTMClassifier(nn.Module):
 
         return preds
 
-
-    def save(self, f_model = 'lstm_classifier.tar', dir_model = '../out/'):
+    def save(self, f_model='lstm_classifier.tar', dir_model='../out/'):
 
         net_params = {'n_layers': self.n_lstm_layers,
                       'hidden_dim': self.hidden_dim,
@@ -207,7 +208,7 @@ class LSTMClassifier(nn.Module):
         TorchUtils.save_model(state, f_model, dir_model)
 
     @classmethod
-    def load(cls, f_model = 'lstm_classifier.tar', dir_model = '../out/'):
+    def load(cls, f_model='lstm_classifier.tar', dir_model='../out/'):
 
         state = TorchUtils.load_model(f_model, dir_model)
         classifier = cls(**state['net_params'])
@@ -215,11 +216,10 @@ class LSTMClassifier(nn.Module):
 
         return classifier
 
-
     def get_importance(self, corpus, corpus_encoder, eval_obj):
-        '''
+        """
         Compute word importance scores based on backpropagated gradients
-        '''
+        """
 
         # methods = ['dot', 'sum', 'max', 'l2', 'max_mul', 'l2_mul', 'mod_dot']
         methods = ['dot']
@@ -236,18 +236,19 @@ class LSTMClassifier(nn.Module):
 
         return explanations
 
+
 if __name__ == '__main__':
     lstm = LSTMClassifier(2, 100, 50, 50, 0.5, 2, 2)
 
-    #variable length sequences
+    # variable length sequences
     X0 = torch.LongTensor([1, 5, 8, 19, 43])
     X1 = torch.LongTensor([23,44,5,13,1,34,43])
-    X = [X1, X0] #sequence needs to be sorted in descending order of length
+    X = [X1, X0] # sequence needs to be sorted in descending order of length
 
     X_padded = nn.utils.rnn.pad_sequence(X, batch_first=True)
     # print(X_padded)
 
-    #create lengths here
+    # @todo: create lengths here
 
     fwd_out = lstm.forward(X_padded, [7,5], lengths, lstm.hidden_in)
 

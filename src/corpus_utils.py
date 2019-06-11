@@ -10,6 +10,7 @@ import json
 #beginning of seq, end of seq, beg of line, end of line, unknown, padding symbol
 BOS, EOS, BOL, EOL, UNK, PAD = '<s>', '</s>', '<bol>', '</bol>', '<unk>', '<pad>'
 
+
 class Vocab:
     def __init__(self):
         self.word2idx = dict() #word to index lookup
@@ -60,8 +61,10 @@ class Vocab:
 
         return inst
 
+
 def dummy_processor(line):
     return line.strip().split()
+
 
 def encode_labels(fit_labels, transform_labels):
     le = LabelEncoder()
@@ -69,10 +72,13 @@ def encode_labels(fit_labels, transform_labels):
     print("Label classes: ", list(le.classes_), "respectively mapped to ", le.transform(le.classes_))
     return le.transform(transform_labels), le
 
+
 class Corpus:
-    def __init__(self, dir_corpus, f_labels, dir_labels, fname_subset, text_processor = dummy_processor, label_encoder = encode_labels):
+    def __init__(self, dir_corpus, f_labels, dir_labels, fname_subset, subset_name,
+                 text_processor=dummy_processor, label_encoder = encode_labels):
         self.dir_in = dir_corpus
         self.fname_subset = fname_subset  # file names for the current split of the corpus
+        self.subset_name = subset_name
 
         all_labels = FileUtils.read_json(f_labels, dir_labels)
         self.labels = [all_labels[i] for i in self.fname_subset]
@@ -89,11 +95,11 @@ class Corpus:
                     word_seq.extend(self.text_processor(line))
                 yield (word_seq, cur_label)
 
+
 class CorpusEncoder:
 
-    def __init__(self, vocab):#, skipgrams):
+    def __init__(self, vocab):
         self.vocab = vocab
-        # self.sg = skipgrams
 
     @classmethod
     def from_corpus(cls, *corpora):
@@ -103,20 +109,19 @@ class CorpusEncoder:
         for corpus in corpora:
             for (words, labels) in corpus:
                 for word in words:
-                    if not word in vocab_set:
+                    if word not in vocab_set:
                         vocab_set.add(word)
 
-
         # create vocabs
-        #@todo: add min and max freq to vocab items
+        # @todo: add min and max freq to vocab items
         vocab = Vocab.populate_indices(vocab_set, unk=UNK, pad=PAD)#bos=BOS, eos=EOS, bol=BOL, eol=EOL),
 
         return cls(vocab)
 
     def encode_inst(self, inst):
-        '''
+        """
         Converts sentence to sequence of indices after adding beginning, end and replacing unk tokens.
-        '''
+        """
         out = [self.transform_item(i) for i in inst]
         # if self.vocab.bos is not None:
         #     out = [self.vocab.bos] + out
@@ -125,9 +130,9 @@ class CorpusEncoder:
         return out
 
     def transform_item(self, item):
-        '''
+        """
         Returns the index for an item if present in vocab, <unk> otherwise.
-        '''
+        """
         try:
             return self.vocab.word2idx[item]
         except KeyError:
@@ -168,20 +173,20 @@ class CorpusEncoder:
             yield instances
 
     def batch_to_tensors(self, cur_insts, cur_labels, device):
-        '''
+        """
         Transforms an encoded batch to the corresponding torch tensor
         :return: tensor of batch padded to maxlen, and a tensor of actual instance lengths
-        '''
+        """
         lengths = [len(inst) for inst in cur_insts]
         n_inst, maxlen = len(cur_insts), max(lengths)
 
         t = torch.zeros(n_inst, maxlen, dtype=torch.int64) + self.vocab.pad #this creates a tensor of padding indices
 
-        #copy the sequence
+        # copy the sequence
         for idx, (inst, length) in enumerate(zip(cur_insts, lengths)):
             t[idx, :length].copy_(torch.tensor(inst))
 
-        #contiguous() makes a copy of tensor so the order of elements would be same as if created from scratch.
+        # contiguous() makes a copy of tensor so the order of elements would be same as if created from scratch.
         t = t.t().contiguous().to(device)
         lengths = torch.tensor(lengths, dtype = torch.int).to(device)
 
@@ -206,12 +211,11 @@ class CorpusEncoder:
         for (cur_inst, __) in iter(corpus):
             cur_inst = self.replace_unk(cur_inst)
             if strip_angular:
-                #stripping angular brackets to support HTML rendering
+                # stripping angular brackets to support HTML rendering
                 cur_inst = [i.strip('<>') for i in cur_inst]
             instances.append(cur_inst)
 
         return instances
-
 
     def to_json(self, fname, dir_out):
         with open(realpath(join(dir_out, fname)), 'w') as f:
@@ -225,6 +229,7 @@ class CorpusEncoder:
         vocab = Vocab.from_dict(obj['vocab'])
 
         return cls(vocab)
+
 
 class DataUtils:
 
@@ -241,14 +246,14 @@ class DataUtils:
         FileUtils.write_list(val_split, 'val_ids.txt', dir_splits)
         FileUtils.write_list(test_split, 'test_ids.txt', dir_splits)
 
-        return (train_split, val_split, test_split)
+        return train_split, val_split, test_split
 
     @staticmethod
     def create_splits(doc_ids, labels):
         train_idx, rest_idx, __, rest_labels = train_test_split(doc_ids, labels, stratify=labels, test_size=0.2)
         val_idx, test_idx = train_test_split(rest_idx, stratify=rest_labels, test_size=0.5)
 
-        return (train_idx, val_idx, test_idx)
+        return train_idx, val_idx, test_idx
 
     @staticmethod
     def read_splits(dir_splits):
@@ -256,4 +261,4 @@ class DataUtils:
         val_split = FileUtils.read_list('val_ids.txt', dir_splits)
         test_split = FileUtils.read_list('test_ids.txt', dir_splits)
 
-        return (train_split, val_split, test_split)
+        return train_split, val_split, test_split

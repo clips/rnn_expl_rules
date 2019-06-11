@@ -5,6 +5,7 @@ import numpy as np
 from operator import itemgetter
 from collections import Counter, defaultdict
 
+
 class SeqSkipGram:
 
     def __init__(self, vocab, pos_th, neg_th):
@@ -22,8 +23,6 @@ class SeqSkipGram:
             inst.init_class(seqs, scores, min_n, max_n, skip, topk, max_vocab_size)
 
         inst.get_sg_bag(seqs, scores, min_n, max_n, skip)
-
-        print("pos neg th", inst.pos_th, inst.neg_th)
 
         return inst
 
@@ -141,6 +140,7 @@ class SeqSkipGram:
                     sg_bag[i, j] = 2
 
         return sg_bag
+
 
 class SkipGramVocab:
 
