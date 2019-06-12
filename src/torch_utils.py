@@ -46,7 +46,7 @@ class TorchUtils:
         return state
 
 
-class EmbeddingMul(nn.Module):
+class CustomEmbedding(nn.Module):
     """This class implements a custom embedding module which registers a hook to save gradients.
     Note: this class accepts the arguments from the original pytorch module
     but only with values that have no effects, i.e set to False, None or -1.
@@ -70,7 +70,7 @@ class EmbeddingMul(nn.Module):
             raise NotImplementedError("sparse must be False, not %s".format(sparse))
         # ____________________________________________________________________
 
-        super(EmbeddingMul, self).__init__()
+        super(CustomEmbedding, self).__init__()
 
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
@@ -123,10 +123,7 @@ class EmbeddingMul(nn.Module):
             - result: of shape (seq_len, batch_size, emb_dim_size)
         """
         #Wrapping as parameter is important to convert it as leaf node
-        # if not self.requires_emb_grad:
         embs = Parameter(self.to_embeddings(input).to(self.weight.device))
-        # else:
-        #     embs = Parameter(self.product_for_embedding(input).to(self.weight.device))
 
         if self.requires_emb_grad:
             # registers hook to track gradients of the embedded sequences
@@ -212,7 +209,7 @@ if __name__ == "__main__":
     input = torch.tensor([[1, 2, 0], [3, 4, 5]])
     emb_vocab = 10
     emb_dim = 5
-    mod = EmbeddingMul(emb_vocab, emb_dim)
+    mod = CustomEmbedding(emb_vocab, emb_dim)
     print(mod.weight)
     print(mod.weight.shape)
     output = mod(input)

@@ -1,44 +1,43 @@
 from src.torch_utils import TorchUtils
-from src.torch_utils import EmbeddingMul
-from src.explanations.grads import Explanation
-from src.explanations.eval import InterpretabilityEval
+from src.torch_utils import CustomEmbedding
+from src.classifiers.classifier_base import RNNClassifier
 
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
 
-from random import shuffle
 
+class LSTMClassifier(RNNClassifier):
 
-class LSTMClassifier(nn.Module):
-
-    def __init__(self, n_layers, hidden_dim, vocab_size, padding_idx, embedding_dim, dropout, label_size, batch_size):
-
-        super(LSTMClassifier, self).__init__()
+    def __init__(self,
+                 n_layers,
+                 hidden_dim,
+                 vocab_size,
+                 padding_idx,
+                 embedding_dim,
+                 dropout,
+                 label_size,
+                 batch_size):
+        super().__init__(batch_size)
 
         self.model_type = 'lstm'
 
-        self.n_lstm_layers = n_layers
+        self.n_layers = n_layers
         self.hidden_dim = hidden_dim
         self.vocab_size = vocab_size
         self.emb_dim = embedding_dim
         self.dropout = dropout
-        self.batch_size = batch_size
-        self.n_labels = label_size
 
-        if torch.cuda.is_available():
-            self.device = torch.device('cuda:1')
-        else:
-            self.device = torch.device('cpu')
+        self.n_labels = label_size
 
         self.hidden_in = self.init_hidden()  # initialize cell states
 
         # self.word_embeddings = nn.Embedding(self.vocab_size, self.emb_dim, padding_idx=padding_idx).to(self.device) #embedding layer, initialized at random
-        self.word_embeddings = EmbeddingMul(self.vocab_size, self.emb_dim, padding_idx=padding_idx) #embedding layer, initialized at random
+        self.word_embeddings = CustomEmbedding(self.vocab_size, self.emb_dim, padding_idx=padding_idx) #embedding layer, initialized at random
 
-        self.lstm = nn.LSTM(self.emb_dim, self.hidden_dim, num_layers=self.n_lstm_layers, dropout=self.dropout) #lstm layers
+        self.lstm = nn.LSTM(self.emb_dim, self.hidden_dim, num_layers=self.n_layers, dropout=self.dropout) #lstm layers
 
-        self.hidden2label = nn.Linear(self.hidden_dim, self.n_labels) #hidden to output layer
+        self.hidden2label = nn.Linear(self.hidden_dim, self.n_labels) # hidden to output layer
 
         self.to(self.device)
 
@@ -46,20 +45,16 @@ class LSTMClassifier(nn.Module):
         """
         initializes hidden and cell states to zero for the first input
         """
-        h0 = torch.zeros(self.n_lstm_layers, self.batch_size, self.hidden_dim).to(self.device)
-        c0 = torch.zeros(self.n_lstm_layers, self.batch_size, self.hidden_dim).to(self.device)
+        h0 = torch.zeros(self.n_layers, self.batch_size, self.hidden_dim).to(self.device)
+        c0 = torch.zeros(self.n_layers, self.batch_size, self.hidden_dim).to(self.device)
 
         return h0, c0
-
-    def detach_hidden_(self):
-        self.hidden_in[0].detach_()
-        self.hidden_in[1].detach_()
 
     def forward(self, sentence, sent_lengths, hidden):
 
         sort, unsort = TorchUtils.get_sort_unsort(sent_lengths)
 
-        embs = self.word_embeddings(sentence).to(self.device) # word sequence to embedding sequence
+        embs = self.word_embeddings(sentence).to(self.device)  # word sequence to embedding sequence
 
         # truncating the batch length if last batch has fewer elements
         cur_batch_len = len(sent_lengths)
@@ -87,115 +82,15 @@ class LSTMClassifier(nn.Module):
 
         return y
 
-    def loss(self, fwd_out, target):
-        # NLL loss to be used when logits have log-softmax output.
-        # If softmax layer is not added, directly CrossEntropyLoss can be used.
-        loss_fn = nn.NLLLoss()
-        return loss_fn(fwd_out, target)
+    def save(self, f_model, dir_model='../out/'):
 
-    def train_model(self, corpus, corpus_encoder, n_epochs, optimizer):
-
-        self.train()
-
-        optimizer = optimizer
-
-        for i in range(n_epochs):
-            running_loss = 0.0
-
-            # shuffle the corpus
-            combined = list(zip(corpus.fname_subset, corpus.labels))
-            shuffle(combined)
-            corpus.fname_subset, corpus.labels = zip(*combined)
-
-            # get train batch
-            for idx, (cur_insts, cur_labels) in enumerate(corpus_encoder.get_batches_from_corpus(corpus, self.batch_size)):
-                cur_insts, cur_labels, cur_lengths = corpus_encoder.batch_to_tensors(cur_insts, cur_labels, self.device)
-
-                # forward pass
-                fwd_out = self.forward(cur_insts, cur_lengths, self.hidden_in)
-
-                # loss calculation
-                loss = self.loss(fwd_out, cur_labels)
-
-                # backprop
-                optimizer.zero_grad()  # reset tensor gradients
-                loss.backward()  # compute gradients for network params w.r.t loss
-                optimizer.step()  # perform the gradient update step
-
-                # detach hidden nodes from the graph. IMP to prevent the graph from growing.
-                self.detach_hidden_()
-
-                # print statistics
-                running_loss += loss.item()
-
-                if idx % 100 == 99:  # print every 100 mini-batches
-                    print('[%d, %5d] loss: %.3f' %
-                          (i + 1, idx + 1, running_loss / 100))
-                    running_loss = 0.0
-
-    def predict(self, corpus, corpus_encoder):
-
-        self.eval()
-
-        y_pred = list()
-        y_true = list()
-
-        for idx, (cur_insts, cur_labels) in enumerate(corpus_encoder.get_batches_from_corpus(corpus, self.batch_size)):
-            cur_insts, cur_labels, cur_lengths = corpus_encoder.batch_to_tensors(cur_insts, cur_labels, self.device)
-
-            y_true.extend(cur_labels.cpu().numpy())
-
-            self.detach_hidden_()
-
-            # forward pass
-            fwd_out = self.forward(cur_insts, cur_lengths, self.hidden_in)
-
-            __, cur_preds = torch.max(fwd_out.detach(), 1)  # first return value is the max value, second is argmax
-            y_pred.extend(cur_preds.cpu().numpy())
-
-        return y_pred, y_true
-
-    def predict_from_insts(self, texts, encoder, get_prob = False):
-        """
-        :param texts: 2D list, n_inst * n_words for every instance
-        :param encoder: corpus encoder object
-        :param get_prob: True to get probability output
-        :param batch_size: num_inst per batch for the model
-        :return: output prediction -- class/prob
-        """
-        self.eval()
-
-        preds = list()
-
-        for cur_batch in encoder.get_batches_from_insts(texts, self.batch_size):
-
-            # tensors shape maxlen * n_inst
-            # lengths is a list of lengths
-            tensors, __, lengths = encoder.batch_to_tensors(cur_batch, None, self.device)
-
-            self.detach_hidden_()
-
-            # forward pass
-            fwd_out = self.forward(tensors, lengths, self.hidden_in)
-
-            if get_prob:
-                fwd_out = torch.exp(fwd_out)  # back from log_softmax to softmax
-                preds.extend(fwd_out.detach().cpu().numpy())
-            else:
-                cur_preds = torch.argmax(fwd_out.detach(), 1)
-                preds.extend(cur_preds.cpu().numpy())
-
-        return preds
-
-    def save(self, f_model='lstm_classifier.tar', dir_model='../out/'):
-
-        net_params = {'n_layers': self.n_lstm_layers,
+        net_params = {'n_layers': self.n_layers,
                       'hidden_dim': self.hidden_dim,
                       'vocab_size': self.vocab_size,
                       'padding_idx': self.word_embeddings.padding_idx,
                       'embedding_dim': self.emb_dim,
-                      'dropout': self.dropout,
                       'label_size': self.n_labels,
+                      'dropout': self.dropout,
                       'batch_size': self.batch_size
                       }
 
@@ -208,7 +103,7 @@ class LSTMClassifier(nn.Module):
         TorchUtils.save_model(state, f_model, dir_model)
 
     @classmethod
-    def load(cls, f_model='lstm_classifier.tar', dir_model='../out/'):
+    def load(cls, f_model, dir_model='../out/'):
 
         state = TorchUtils.load_model(f_model, dir_model)
         classifier = cls(**state['net_params'])
@@ -216,25 +111,13 @@ class LSTMClassifier(nn.Module):
 
         return classifier
 
-    def get_importance(self, corpus, corpus_encoder, eval_obj):
-        """
-        Compute word importance scores based on backpropagated gradients
-        """
+    @property
+    def hidden_in(self):
+        return self._hidden_in
 
-        # methods = ['dot', 'sum', 'max', 'l2', 'max_mul', 'l2_mul', 'mod_dot']
-        methods = ['dot']
-
-        explanations = dict()
-
-        for cur_method in methods:
-            print("Pooling method: ", cur_method)
-
-            explanation = Explanation.get_grad_importance(cur_method, self, corpus, corpus_encoder)
-            explanations[cur_method] = explanation
-
-            eval_obj.avg_prec_recall_f1_at_k_from_corpus(explanation.imp_scores, corpus, corpus_encoder, k = 15)
-
-        return explanations
+    @hidden_in.setter
+    def hidden_in(self, val):
+        self._hidden_in = val
 
 
 if __name__ == '__main__':
