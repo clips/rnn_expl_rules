@@ -19,14 +19,14 @@ class Explanation:
         self.imp_scores = imp_scores
 
     @classmethod
-    def get_grad_importance(cls, model, corpus, corpus_encoder, grad_pooling):
+    def get_grad_importance(cls, grad_pooling, model, corpus, corpus_encoder):
         """
         Compute word importance scores based on backpropagated gradients
+        :param grad_pooling: (dot|sum|max|l2|max_mul|l2_mul)
+                              pooling technique for combining embedding dimension importance into word importance
         :param model: model to compute importance scores for
         :param corpus: corpus to explain
         :param corpus_encoder: encoder used for the given corpus
-        :param grad_pooling: (dot|sum|max|l2|max_mul|l2_mul)
-                              pooling technique for combining embedding dimension importance into word importance
         """
         grad_pooling = grad_pooling.lower()
 
@@ -74,14 +74,9 @@ class Explanation:
             # keeping the importance of valid timesteps only
             for row, cols in enumerate(cur_lengths):
                 global_imp_lst.append(word_imp[row, :cols].tolist())
-
-            # recording gold and predicted labels for saving the JSON file later
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                preds = corpus.label_encoder.inverse_transform(preds.tolist())
             pred_lst.extend(preds)
 
-        inst = cls('grad_' + grad_pooling, model, corpus, corpus_encoder, global_imp_lst, preds)
+        inst = cls('grad_' + grad_pooling, model, corpus, corpus_encoder, global_imp_lst, pred_lst)
 
         inst.save(fname='imp_scores_' +
                         model.model_type +
@@ -98,6 +93,7 @@ class Explanation:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             golds = self.corpus.label_encoder.inverse_transform(self.corpus.labels)
+            preds = self.corpus.label_encoder.inverse_transform(self.preds)
             print("gold labels, ", golds)
 
         # saving the sequences, the importance scores, and the gold and predicted labels as JSON file
@@ -105,7 +101,7 @@ class Explanation:
             {'seq_lst': seqs,
              'imp_scores': self.imp_scores,
              'gold': golds,
-             'pred': self.preds},
+             'pred': preds},
             fname, dir_out)
 
     @classmethod
@@ -117,7 +113,9 @@ class Explanation:
 
         json_file = FileUtils.read_json(fname, dir_in)
 
-        inst = cls(pooling, model, corpus, encoder, json_file['imp_scores'], json_file['pred'])
+        inst = cls(pooling, model, corpus, encoder,
+                   json_file['imp_scores'],
+                   corpus.label_encoder.transform(json_file['pred']))
         return inst
 
 

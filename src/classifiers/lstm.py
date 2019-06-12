@@ -229,7 +229,7 @@ class LSTMClassifier(nn.Module):
         for cur_method in methods:
             print("Pooling method: ", cur_method)
 
-            explanation = Explanation.get_grad_importance(self, corpus, corpus_encoder, cur_method, 'lstm')
+            explanation = Explanation.get_grad_importance(cur_method, self, corpus, corpus_encoder)
             explanations[cur_method] = explanation
 
             eval_obj.avg_prec_recall_f1_at_k_from_corpus(explanation.imp_scores, corpus, corpus_encoder, k = 15)

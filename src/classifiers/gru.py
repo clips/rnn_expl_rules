@@ -26,7 +26,7 @@ class GRUClassifier(nn.Module):
         self.n_labels = label_size
 
         if torch.cuda.is_available():
-            self.device = torch.device('cuda:0')
+            self.device = torch.device('cuda:1')
         else:
             self.device = torch.device('cpu')
 
@@ -224,7 +224,7 @@ class GRUClassifier(nn.Module):
         for cur_method in methods:
             print("Pooling method: ", cur_method)
 
-            explanation = Explanation.get_grad_importance(self, corpus, corpus_encoder, cur_method, 'gru')
+            explanation = Explanation.get_grad_importance(cur_method, self, corpus, corpus_encoder)
             explanations[cur_method] = explanation
 
             eval_obj.avg_prec_recall_f1_at_k_from_corpus(explanation.imp_scores, corpus, corpus_encoder, k = 15)

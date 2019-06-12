@@ -118,18 +118,19 @@ def main():
 
     # populating weka files for interpretability
     clamp_obj = Clamp(dir_clamp)
-    train_sg = get_sg_bag(clamp_obj, train_corp, classifier, corpus_encoder, model_name, 'train')
-    val_sg = get_sg_bag(clamp_obj, val_corp, classifier, corpus_encoder, model_name, 'val',
+    train_sg = get_sg_bag(clamp_obj, train_corp, classifier, corpus_encoder)
+    val_sg = get_sg_bag(clamp_obj, val_corp, classifier, corpus_encoder,
                         vocab=train_sg.vocab, pos_th=train_sg.pos_th, neg_th=train_sg.neg_th)
-    test_sg = get_sg_bag(clamp_obj, test_corp, classifier, corpus_encoder, model_name, 'test',
+    test_sg = get_sg_bag(clamp_obj, test_corp, classifier, corpus_encoder,
                          vocab=train_sg.vocab, pos_th=train_sg.pos_th, neg_th=train_sg.neg_th)
 
 
-def get_sg_bag(clamp_obj, eval_corp, classifier, encoder, model_name, subset, topk=50,
+def get_sg_bag(clamp_obj, eval_corp, classifier, encoder,
+               n_sg=50,
                vocab=None, max_vocab_size=5000, pos_th=0., neg_th=0.,
-               get_imp = False, search_sg_params=False):
+               get_imp=False, search_sg_params=False):
 
-    print("Getting top skipgrams for subset {}".format(subset))
+    print("Getting top skipgrams for subset {}".format(eval_corp.subset_name))
     eval_obj = InterpretabilityEval(eval_corp, clamp_obj)
 
     # methods = ['l2', 'sum', 'max', 'dot', 'max_mul']
@@ -143,7 +144,7 @@ def get_sg_bag(clamp_obj, eval_corp, classifier, encoder, model_name, subset, to
         if get_imp:
             print("Computing word importance scores")
             # computing word importance scores
-            explanation = Explanation.get_grad_importance(classifier, eval_corp, encoder, cur_method, model_name, subset)
+            explanation = Explanation.get_grad_importance(cur_method, classifier, eval_corp, encoder)
             explanations[cur_method] = explanation
             eval_obj.avg_acc_from_corpus(explanation.imp_scores, eval_corp, encoder)
         else:
@@ -152,7 +153,6 @@ def get_sg_bag(clamp_obj, eval_corp, classifier, encoder, model_name, subset, to
 
     # getting skipgrams
     seqs = encoder.get_decoded_sequences(eval_corp)
-    y_pred, __ = classifier.predict(eval_corp, encoder)
 
     if search_sg_params:
         # search over best min_n, max_n and skip parameters
@@ -161,15 +161,21 @@ def get_sg_bag(clamp_obj, eval_corp, classifier, encoder, model_name, subset, to
         # min_n, max_n, skip = 1, 4, 2
         min_n, max_n, skip = 1, 1, 0
 
-    sg = SeqSkipGram.from_seqs(seqs, explanations['dot'].imp_scores, min_n=min_n, max_n=max_n, skip=skip,
-                               topk=topk, vocab=vocab, max_vocab_size=max_vocab_size, pos_th=pos_th, neg_th=neg_th)
+    sg = SeqSkipGram.from_seqs(seqs, explanations['dot'].imp_scores,
+                               min_n=min_n, max_n=max_n, skip=skip,
+                               topk=n_sg, vocab=vocab, max_vocab_size=max_vocab_size,
+                               pos_th=pos_th, neg_th=neg_th)
 
     # write as arff file
     feat_dict = get_feat_dict(sg.vocab.term2idx, vec_type='discretized')
-    rel_name = model_name + '_hid' + str(classifier.hidden_dim) + '_emb' + str(classifier.emb_dim) + '_synthetic' \
+    rel_name = classifier.model_type \
+               + '_hid' + str(classifier.hidden_dim) \
+               + '_emb' + str(classifier.emb_dim) + '_synthetic' \
                + '_min' + str(min_n) + '_max' + str(max_n) + '_skip' + str(skip) + '_'
-    write_arff_file(rel_name, feat_dict, eval_corp.label_encoder.classes_, sg.sg_bag, y_pred, '../out/weka/',
-                    rel_name + subset + '_pred.arff')
+    write_arff_file(rel_name,
+                    feat_dict, eval_corp.label_encoder.classes_,
+                    sg.sg_bag, explanations['dot'].preds,
+                    '../out/weka/', rel_name + eval_corp.subset_name + '_pred.arff')
 
     return sg
 
