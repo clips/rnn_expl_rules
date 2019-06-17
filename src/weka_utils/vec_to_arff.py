@@ -3,13 +3,14 @@ import os
 
 from scipy.sparse.base import issparse
 
+
 def get_feat_dict(vocab_dict, vec_type):
-    '''
+    """
     @todo: Support discrete features
     :param vocab_dict: dictionary {vocab_item, index}
-    :param vec_type: (tf-idf/tf/signed) type of vectors
+    :param vec_type: (tf-idf/tf/signed/discretized/binary) type of vectors
     :return: dictionary {feat_name:[possible_vals/data_type]}
-    '''
+    """
 
     print("Getting feature dictionary")
 
@@ -17,10 +18,11 @@ def get_feat_dict(vocab_dict, vec_type):
 
     if vec_type in ['tf', 'tf-idf']:
         data_type = _get_cont_dtype(vec_type)
-    elif vec_type in ['signed', 'discretized']:
+    elif vec_type in ['signed', 'discretized', 'binary']:
         data_type = _get_discrete_type(vec_type)
 
     return {i:data_type for i in feat_list}
+
 
 def write_arff_file(rel_name, feat_dict, class_names, data_vec, data_classes, dir_name, fname):
     class_names = escape_attribute(class_names)
@@ -35,17 +37,19 @@ def _write_relation(rel_name, dir_name, fname):
 
     print("Writing relations...")
     with open(os.path.join(dir_name, fname), 'w') as f:
-        f.write("@RELATION " + rel_name.replace(" ", "_") +"\n")
+        f.write("@RELATION " + rel_name.replace(" ", "_") + "\n")
     print("Done!")
+
 
 def escape_attribute(attr_list):
 
-    attr_list = ['"' + attr.strip().replace('"','\\"') + '"' for attr in attr_list]
+    attr_list = ['"' + attr.strip().replace('"', '\\"') + '"' for attr in attr_list]
 
     return attr_list
 
+
 def _write_attributes(feat_dict, class_names, dir_name, fname):
-    '''
+    """
     Creates an attribute file with all feature names, their data_proc types (if continuous) and their possible values
     (if discrete), and the possible classes.
     :param feat_dict: Dict of feature names in the order of featurized data_proc indices and list of their corresponding data_proc type or possible values
@@ -53,7 +57,7 @@ def _write_attributes(feat_dict, class_names, dir_name, fname):
     :param dir_name: directory name for data_proc files
     :param fname: ripper attribute file name
     :return:
-    '''
+    """
     if not os.path.exists(dir_name):
         os.makedirs(dir_name)
 
@@ -64,38 +68,44 @@ def _write_attributes(feat_dict, class_names, dir_name, fname):
         _write_class_attr(class_names, f)
     print("Done!")
 
+
 def _get_feat_names(vocab_dict):
-    '''
+    """
     Returns list of feature names in increasing order of their indices
     :param vocab_dict: either a dictionary of vocab items and their index, or a trained sklearn vectorizer object
     :return: list
-    '''
+    """
     # print("Getting feature names")
     feats = [k for k, v in sorted(vocab_dict.items(), key=operator.itemgetter(1))]
     feats = escape_attribute(feats)
     return feats
 
+
 def _get_discrete_type(vec_type):
-    '''
+    """
     Returns the set of values of discrete features.
-    :param vec_type: description of vector generation method (signed)
+    :param vec_type: description of vector generation method (signed|discretized|binary)
     :return: string representing all values of a feature type
-    '''
+    """
     # print("Getting feature types")
-    type_dict = {'signed': ['-1', '0', '1'], 'discretized':['-2', '-1', '0', '1', '2']}
+    type_dict = {'signed': ['-1', '0', '1'],
+                 'discretized': ['-2', '-1', '0', '1', '2'],
+                 'binary': ['1', '0']
+                 }
 
     try:
         return type_dict[vec_type]
     except KeyError:
         print('Continuous feature value description not recognized. Please enter the correct type')
 
+
 def _get_cont_dtype(vec_type):
-    '''
+    """
     Returns the data_proc type as string (float/int) if TF-IDF or count vectorization technique has been used for continuous feature generation.
     Extend this function to add other vectorization methods
-    :param vec_type: description of vector generation method (tf-idf/tf/signed)
+    :param vec_type: description of vector generation method (tf-idf/tf/signed/discretized/binary)
     :return: string representing feature type
-    '''
+    """
     # print("Getting feature types")
     type_dict = {'tf-idf': 'NUMERIC', 'tf': 'NUMERIC'}
 
@@ -104,6 +114,7 @@ def _get_cont_dtype(vec_type):
     except KeyError:
         print('Continuous feature value description not recognized, returning NUMERIC by default.')
         return ['NUMERIC']
+
 
 def _write_feat_attr(feat, vals, f):
     if vals in ['NUMERIC', 'numeric']:
@@ -117,19 +128,20 @@ def _write_feat_attr(feat, vals, f):
 
     f.write("@ATTRIBUTE " + feat + " " + vals + "\n")
 
+
 def _write_class_attr(class_names, f):
-    f.write("@ATTRIBUTE text_class {"+ ",".join(class_names)+"}\n")
+    f.write("@ATTRIBUTE text_class {" + ",".join(class_names)+"}\n")
 
 
 def _write_data(vec, class_labels, class_names, dir_name, fname):
-    '''
+    """
     Create a file (can be train or test data_proc) with feature values and class labels
     :param vec: numpy matrix or 2D list with every row indicating one instance, and every column indicating a feature
     :param class_labels: list of class labels (indices) for all instances
     :param class_names: list with class names in the order of indices of class labels
     :param dir_name: directory name for data_proc files
     :param fname: text file name to write features and class labels to
-    '''
+    """
 
     if not os.path.exists(dir_name):
         os.makedirs(dir_name)
@@ -139,13 +151,14 @@ def _write_data(vec, class_labels, class_names, dir_name, fname):
         for feats, class_label in zip(vec, class_labels):
             _write_instance(feats, class_names[class_label], f)
 
+
 def _write_instance(feats, class_label, f):
 
     if issparse(feats):
         feats = feats.toarray().reshape(-1,)
 
     try:
-        feat_list = [str(i).replace(" ","_") for i in feats]
+        feat_list = [str(i).replace(" ", "_") for i in feats]
     except ValueError:
         print("Please enter correct feature values")
     else:
@@ -156,8 +169,9 @@ def _write_instance(feats, class_label, f):
         else:
             f.write(",".join(feat_list)+","+class_label+"\n")
 
+
 def create_weka_files(vocab_dict, class_names, x_train, x_val, x_test, y_train, y_val, y_test, data_prefix, vec_type = 'tf-idf', data_dir ='../data/'):
-    '''
+    """
     Create the data_proc files for ripper compatibility
     :param vocab_dict: dictionary of {vocab_item: index}
     :param class_names: list of class names that can occur in the dataset in increasing index order
@@ -166,18 +180,24 @@ def create_weka_files(vocab_dict, class_names, x_train, x_val, x_test, y_train, 
     :param y_train: training class labels (names) list
     :param y_test: testing class labels (names) list
     :param data_prefix: string prefix indicating details of data_proc, e.g., dataset name and vector type
-    :param vec_type: type of feature vectors ('tf-idf' | 'tf' | 'signed')
+    :param vec_type: type of feature vectors ('tf-idf' | 'tf' | 'signed' | 'discretized' | 'binary')
     :param data_dir: directory path for input data_proc files in model input formats
-    '''
+    """
 
     feat_dict = get_feat_dict(vocab_dict, vec_type)
 
     print("Writing train file...")
-    write_arff_file(data_prefix, feat_dict, class_names, x_train, y_train, data_dir, data_prefix + '-train.arff')
+    write_arff_file(data_prefix, feat_dict, class_names,
+                    x_train, y_train,
+                    data_dir, data_prefix + '-train.arff')
     print("Done")
     print("Writing val file...")
-    write_arff_file(data_prefix, feat_dict, class_names, x_val, y_val, data_dir, data_prefix + '-val.arff')
+    write_arff_file(data_prefix, feat_dict, class_names,
+                    x_val, y_val,
+                    data_dir, data_prefix + '-val.arff')
     print("Done")
     print("Writing test file")
-    write_arff_file(data_prefix, feat_dict, class_names, x_test, y_test, data_dir, data_prefix + '-test.arff')
+    write_arff_file(data_prefix, feat_dict, class_names,
+                    x_test, y_test,
+                    data_dir, data_prefix + '-test.arff')
     print("Done")

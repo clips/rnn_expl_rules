@@ -1,12 +1,12 @@
-from src.utils import get_top_items_dict
+from src.utils import get_top_items_dict, get_most_freq_items
 
 from nltk import skipgrams
 import numpy as np
 from operator import itemgetter
-from collections import Counter, defaultdict
+from collections import defaultdict
 
 
-class SeqSkipGram:
+class SeqImpSkipGram:
 
     def __init__(self, vocab, pos_th, neg_th):
         self.vocab = vocab
@@ -183,10 +183,7 @@ class SkipGramVocab:
             print("Keeping top {} vocab items only".format(max_vocab_size))
 
             if vocab_filter == 'freq':
-                term2freq = Counter(x for xs in seqs for x in set(xs))  # number of instances the term occurs in
-                print("Original vocab size: ", len(term2freq))
-                print("Selecting most frequent top skipgrams")
-                vocab_set = dict(term2freq.most_common(max_vocab_size)).keys()  # frequency filter.
+                vocab_set = get_most_freq_items(seqs, max_vocab_size)
 
             elif vocab_filter == 'kbest':
                 print("Selecting most contributing top skipgrams")

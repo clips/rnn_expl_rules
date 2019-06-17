@@ -1,7 +1,7 @@
 from os.path import exists, join, realpath
 from os import makedirs
 import json
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 
 class FileUtils:
     @staticmethod
@@ -47,3 +47,15 @@ def get_top_items_dict(data_dict, k, order=False):
     if order:
         return OrderedDict(top)
     return dict(top)
+
+
+def get_most_freq_items(items, k):
+    """
+    :param items: 2D list of items
+    :param k: number of items to retain
+    :return: set of most frequent items
+    """
+    # count the number of instances the term occurs in
+    term2freq = Counter(x for xs in items for x in set(xs))
+    reduced_set = dict(term2freq.most_common(k)).keys()  # frequency filter.
+    return reduced_set

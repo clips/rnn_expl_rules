@@ -6,7 +6,8 @@ from src.classifiers.lstm import LSTMClassifier
 from src.classifiers.gru import GRUClassifier
 from src.explanations.grads import Explanation
 from src.explanations.eval import InterpretabilityEval
-from src.explanations.imp_sg import SeqSkipGram
+from src.explanations.imp_sg import SeqImpSkipGram
+from src.explanations.expl_orig_input import SeqSkipGram
 from src.clamp.clamp_proc import Clamp
 from src.utils import FileUtils
 from src.weka_utils.vec_to_arff import get_feat_dict, write_arff_file
@@ -65,7 +66,7 @@ def main():
 
     # train_model = True
     train_model = False
-    model_name = 'gru'  # lstm|gru
+    model_name = 'lstm'  # lstm|gru
 
     if train_model:
         net_params = {'n_layers': 1,
@@ -95,9 +96,9 @@ def main():
     else:
         # load model
         if model_name == 'lstm':
-            classifier = LSTMClassifier.load(f_model='lstm_classifier_hid50_emb50.tar')
+            classifier = LSTMClassifier.load(f_model='lstm_classifier_hid100_emb100.tar')
         elif model_name == 'gru':
-            classifier = GRUClassifier.load(f_model='gru_classifier_hid100_emb50.tar')
+            classifier = GRUClassifier.load(f_model='gru_classifier_hid50_emb50.tar')
         else:
             raise ValueError("Model should be either 'gru' or 'lstm'")
 
@@ -116,19 +117,26 @@ def main():
     # compute scoring metrics
     print(f1_score(y_true=y_true, y_pred=y_pred, average='macro'))
 
+    baseline = True
+    if baseline:
+        train_sg = get_sg_baseline(train_corp, classifier, corpus_encoder)
+        val_sg = get_sg_baseline(val_corp, classifier, corpus_encoder, vocab=train_sg.vocab)
+        test_sg = get_sg_baseline(test_corp, classifier, corpus_encoder, vocab=train_sg.vocab)
+        print("Wrote files for baseline evaluation")
+
     # populating weka files for interpretability
     clamp_obj = Clamp(dir_clamp)
-    train_sg = get_sg_bag(clamp_obj, train_corp, classifier, corpus_encoder)
-    val_sg = get_sg_bag(clamp_obj, val_corp, classifier, corpus_encoder,
-                        vocab=train_sg.vocab, pos_th=train_sg.pos_th, neg_th=train_sg.neg_th)
-    test_sg = get_sg_bag(clamp_obj, test_corp, classifier, corpus_encoder,
-                         vocab=train_sg.vocab, pos_th=train_sg.pos_th, neg_th=train_sg.neg_th)
+    train_sg = get_sg(clamp_obj, train_corp, classifier, corpus_encoder)
+    val_sg = get_sg(clamp_obj, val_corp, classifier, corpus_encoder,
+                    vocab=train_sg.vocab, pos_th=train_sg.pos_th, neg_th=train_sg.neg_th)
+    test_sg = get_sg(clamp_obj, test_corp, classifier, corpus_encoder,
+                     vocab=train_sg.vocab, pos_th=train_sg.pos_th, neg_th=train_sg.neg_th)
 
 
-def get_sg_bag(clamp_obj, eval_corp, classifier, encoder,
-               n_sg=50,
-               vocab=None, max_vocab_size=5000, pos_th=0., neg_th=0.,
-               get_imp=False, search_sg_params=False):
+def get_sg(clamp_obj, eval_corp, classifier, encoder,
+           n_sg=50,
+           vocab=None, max_vocab_size=5000, pos_th=0., neg_th=0.,
+           get_imp=False, search_sg_params=False):
 
     print("Getting top skipgrams for subset {}".format(eval_corp.subset_name))
     eval_obj = InterpretabilityEval(eval_corp, clamp_obj)
@@ -161,10 +169,10 @@ def get_sg_bag(clamp_obj, eval_corp, classifier, encoder,
         # min_n, max_n, skip = 1, 4, 2
         min_n, max_n, skip = 1, 1, 0
 
-    sg = SeqSkipGram.from_seqs(seqs, explanations['dot'].imp_scores,
-                               min_n=min_n, max_n=max_n, skip=skip,
-                               topk=n_sg, vocab=vocab, max_vocab_size=max_vocab_size,
-                               pos_th=pos_th, neg_th=neg_th)
+    sg = SeqImpSkipGram.from_seqs(seqs, explanations['dot'].imp_scores,
+                                  min_n=min_n, max_n=max_n, skip=skip,
+                                  topk=n_sg, vocab=vocab, max_vocab_size=max_vocab_size,
+                                  pos_th=pos_th, neg_th=neg_th)
 
     # write as arff file
     feat_dict = get_feat_dict(sg.vocab.term2idx, vec_type='discretized')
@@ -180,6 +188,29 @@ def get_sg_bag(clamp_obj, eval_corp, classifier, encoder,
     return sg
 
 
+def get_sg_baseline(eval_corp, classifier, encoder, n_sg=50, vocab=None, max_vocab_size=5000):
+    seqs = encoder.get_decoded_sequences(eval_corp)
+    y_pred, __ = classifier.predict(eval_corp, encoder)
+
+    min_n, max_n, skip = 1, 4, 2
+
+    sg = SeqSkipGram.from_seqs(seqs, min_n=min_n, max_n=max_n, skip=skip,
+                               topk=n_sg, vocab=vocab, max_vocab_size=max_vocab_size)
+
+    # write as arff file
+    feat_dict = get_feat_dict(sg.vocab.term2idx, vec_type='binary')
+    rel_name = classifier.model_type \
+               + '_hid' + str(classifier.hidden_dim) \
+               + '_emb' + str(classifier.emb_dim) + '_synthetic' \
+               + '_min' + str(min_n) + '_max' + str(max_n) + '_skip' + str(skip) + '_baseline_'
+    write_arff_file(rel_name,
+                    feat_dict, eval_corp.label_encoder.classes_,
+                    sg.sg_bag, y_pred,
+                    '../out/weka/', rel_name + eval_corp.subset_name + '_pred.arff')
+
+    return sg
+
+
 def sg_param_search(seqs, scores, eval_obj):
 
     prec = dict()
@@ -188,7 +219,7 @@ def sg_param_search(seqs, scores, eval_obj):
     for min_n in range(1, 5):
         for max_n in range(min_n, min_n + 4):
             for skip in range(11):
-                sg = SeqSkipGram.from_seqs(seqs, scores, min_n=1, max_n=max_n, skip=skip, topk=50)
+                sg = SeqImpSkipGram.from_seqs(seqs, scores, min_n=1, max_n=max_n, skip=skip, topk=50)
                 cur_prec = eval_obj.avg_prec_sg(sg.top_sg_seqs)
                 prec[repr((min_n, max_n, skip))] = cur_prec  # converting key to string for JSON serialization
 
