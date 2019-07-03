@@ -74,7 +74,7 @@ class Explanation:
             # keeping the importance of valid timesteps only
             for row, cols in enumerate(cur_lengths):
                 global_imp_lst.append(word_imp[row, :cols].tolist())
-            pred_lst.extend(preds)
+            pred_lst.extend(preds.tolist())
 
         inst = cls('grad_' + grad_pooling, model, corpus, corpus_encoder, global_imp_lst, pred_lst)
 
@@ -92,11 +92,11 @@ class Explanation:
         seqs = self.corpus_encoder.get_decoded_sequences(self.corpus, strip_angular=True)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            golds = self.corpus.label_encoder.inverse_transform(self.corpus.labels)
-            preds = self.corpus.label_encoder.inverse_transform(self.preds)
-            print("gold labels, ", golds)
+            golds = self.corpus.label_encoder.inverse_transform(self.corpus.labels).tolist()
+            preds = self.corpus.label_encoder.inverse_transform(self.preds).tolist()
 
         # saving the sequences, the importance scores, and the gold and predicted labels as JSON file
+
         FileUtils.write_json(
             {'seq_lst': seqs,
              'imp_scores': self.imp_scores,
