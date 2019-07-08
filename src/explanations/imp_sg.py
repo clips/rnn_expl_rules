@@ -50,7 +50,8 @@ class SeqImpSkipGram:
         self.pos_th = min([j for i in top_sg_scores for j in i if j > 0.])
         self.neg_th = min([j for i in top_sg_scores for j in i if j < 0.])
 
-    def get_sg(self, seqs, scores, min_n, max_n, skip):
+    @staticmethod
+    def get_sg(seqs, scores, min_n, max_n, skip):
         """
         Return all skipgrams of seqs and scores of length [min_n, max_n] with max number of skip tokens/=
         :param seqs: token sequences 2D list or similar
@@ -74,7 +75,8 @@ class SeqImpSkipGram:
 
         return cur_inst_sg_seqs, cur_inst_sg_scores
 
-    def get_top_sg(self, seqs, scores, k):
+    @staticmethod
+    def get_top_sg(seqs, scores, k):
         """
         Get the top k skipgrams for a given instance and their corresponding importance scores
         :param sg_seqs: skipgram sequences for a given instance
@@ -87,8 +89,20 @@ class SeqImpSkipGram:
         # reversing the indices of the last k elements, we get the index order to sort array in descending order.
         # using absolute scores to get top features; ignoring direction of effect
         idx = np.argsort(abs(np.array(scores)))[-k:][::-1]
-        top_seqs = list(itemgetter(*idx)(seqs))
-        top_scores = list(itemgetter(*idx)(scores))
+        top_seqs = itemgetter(*idx)(seqs)
+        top_scores = itemgetter(*idx)(scores)
+
+        # IMP! Single terms are split into characters
+        # if we don't add the check and process accordingly
+        # this happens because itemgetter returns inconsistent datatypes
+        # when the referenced object contains 1 element vs multiple elts
+        if type(top_seqs) == tuple:
+            top_seqs = list(top_seqs)
+            top_scores = list(top_scores)
+        else:
+            top_seqs = [top_seqs]
+            top_scores = [top_scores]
+
         return top_seqs, top_scores
 
     def populate_vocab(self, sg_seqs, sg_scores, max_vocab_size):
