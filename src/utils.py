@@ -38,6 +38,15 @@ class FileUtils:
 
         return data
 
+    @staticmethod
+    def write_txt(string, fname, dir_out):
+
+        if not exists(dir_out):
+            makedirs(dir_out)
+
+        with open(realpath(join(dir_out, fname)), 'w') as f:
+            f.write(string)
+
 
 def get_top_items_dict(data_dict, k, order=False):
     """Get top k items in the dictionary by score.
