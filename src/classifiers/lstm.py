@@ -17,7 +17,8 @@ class LSTMClassifier(RNNClassifier):
                  embedding_dim,
                  dropout,
                  label_size,
-                 batch_size):
+                 batch_size,
+                 bidir=False):
         super().__init__(batch_size)
 
         self.model_type = 'lstm'
@@ -27,6 +28,7 @@ class LSTMClassifier(RNNClassifier):
         self.vocab_size = vocab_size
         self.emb_dim = embedding_dim
         self.dropout = dropout
+        self.bidirectional = bidir
 
         self.n_labels = label_size
 
@@ -35,9 +37,13 @@ class LSTMClassifier(RNNClassifier):
         # self.word_embeddings = nn.Embedding(self.vocab_size, self.emb_dim, padding_idx=padding_idx).to(self.device) #embedding layer, initialized at random
         self.word_embeddings = CustomEmbedding(self.vocab_size, self.emb_dim, padding_idx=padding_idx) #embedding layer, initialized at random
 
-        self.lstm = nn.LSTM(self.emb_dim, self.hidden_dim, num_layers=self.n_layers, dropout=self.dropout) #lstm layers
+        # lstm layers
+        self.lstm = nn.LSTM(self.emb_dim, self.hidden_dim,
+                            num_layers=self.n_layers, dropout=self.dropout,
+                            bidirectional=self.bidirectional)
 
-        self.hidden2label = nn.Linear(self.hidden_dim, self.n_labels) # hidden to output layer
+        # hidden to output layer
+        self.hidden2label = nn.Linear(self.hidden_dim, self.n_labels)
 
         self.to(self.device)
 
@@ -45,8 +51,13 @@ class LSTMClassifier(RNNClassifier):
         """
         initializes hidden and cell states to zero for the first input
         """
-        h0 = torch.zeros(self.n_layers, self.batch_size, self.hidden_dim).to(self.device)
-        c0 = torch.zeros(self.n_layers, self.batch_size, self.hidden_dim).to(self.device)
+        if self.bidirectional:
+            n_dirs = 2
+        else:
+            n_dirs = 1
+
+        h0 = torch.zeros(self.n_layers*n_dirs, self.batch_size, self.hidden_dim).to(self.device)
+        c0 = torch.zeros(self.n_layers*n_dirs, self.batch_size, self.hidden_dim).to(self.device)
 
         return h0, c0
 
@@ -121,7 +132,7 @@ class LSTMClassifier(RNNClassifier):
 
 
 if __name__ == '__main__':
-    lstm = LSTMClassifier(2, 100, 50, 50, 0.5, 2, 2)
+    lstm = LSTMClassifier(False, 2, 100, 50, 50, 0.5, 2, 2)
 
     # variable length sequences
     X0 = torch.LongTensor([1, 5, 8, 19, 43])

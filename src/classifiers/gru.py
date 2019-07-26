@@ -17,7 +17,8 @@ class GRUClassifier(RNNClassifier):
                  embedding_dim,
                  dropout,
                  label_size,
-                 batch_size):
+                 batch_size,
+                 bidir=False):
 
         super().__init__(batch_size)
 
@@ -33,9 +34,14 @@ class GRUClassifier(RNNClassifier):
         self.hidden_in = self.init_hidden()  # initialize cell states
 
         # self.word_embeddings = nn.Embedding(self.vocab_size, self.emb_dim, padding_idx = padding_idx).to(self.device) #embedding layer, initialized at random
-        self.word_embeddings = CustomEmbedding(self.vocab_size, self.emb_dim, padding_idx=padding_idx) #embedding layer, initialized at random
+        self.word_embeddings = CustomEmbedding(self.vocab_size, self.emb_dim,
+                                               padding_idx=padding_idx) #embedding layer, initialized at random
 
-        self.gru = nn.GRU(self.emb_dim, self.hidden_dim, num_layers=self.n_gru_layers, dropout=self.dropout) #gru layers
+        # gru layers
+        self.gru = nn.GRU(self.emb_dim, self.hidden_dim,
+                          num_layers=self.n_gru_layers,
+                          dropout=self.dropout,
+                          bidirectional=bidir)
 
         self.hidden2label = nn.Linear(self.hidden_dim, self.n_labels) #hidden to output layer
 
@@ -45,7 +51,11 @@ class GRUClassifier(RNNClassifier):
         """
         initializes hidden and cell states to zero for the first input
         """
-        h0 = torch.zeros(self.n_gru_layers, self.batch_size, self.hidden_dim).to(self.device)
+        if self.bidirectional:
+            n_dirs = 2
+        else:
+            n_dirs = 1
+        h0 = torch.zeros(self.n_gru_layers*n_dirs, self.batch_size, self.hidden_dim).to(self.device)
         return h0
 
     def forward(self, sentence, sent_lengths, hidden):
