@@ -4,6 +4,8 @@ from src.explanations.grads import Explanation
 
 import torch.nn as nn
 import torch
+from sklearn.utils.class_weight import compute_class_weight
+from sklearn.metrics import f1_score
 
 from random import shuffle
 
@@ -15,7 +17,7 @@ class RNNClassifier(nn.Module):
         super().__init__()
 
         if torch.cuda.is_available():
-            self.device = torch.device('cuda:0')
+            self.device = torch.device('cuda:1')
         else:
             self.device = torch.device('cpu')
 
@@ -48,19 +50,31 @@ class RNNClassifier(nn.Module):
         else:
             self.hidden_in.detach_()
 
-    def loss(self, fwd_out, target):
+    def loss(self, fwd_out, target, weight_tensor):
         # NLL loss to be used when logits have log-softmax output.
         # If softmax layer is not added, directly CrossEntropyLoss can be used.
-        loss_fn = nn.NLLLoss()
+        loss_fn = nn.NLLLoss(weight=weight_tensor)
         return loss_fn(fwd_out, target)
 
-    def train_model(self, corpus, corpus_encoder, n_epochs, optimizer):
+    def train_model(self, corpus, corpus_encoder, n_epochs, optimizer, val_corpus=None,
+                    weighted_loss=False):
 
-        self.train()
+        if weighted_loss:
+            # IMP: the following would break if y does not contain all possible classes
+            label_weights = compute_class_weight(class_weight='balanced',
+                                                 classes=list(set(corpus.labels)),
+                                                 y=corpus.labels)
+            label_weights = torch.from_numpy(label_weights).type(torch.FloatTensor)
+            label_weights = label_weights.to(self.device)
+        else:
+            label_weights = None
+
+        print("Label weights: ", label_weights)
 
         optimizer = optimizer
 
         for i in range(n_epochs):
+
             running_loss = 0.0
 
             # shuffle the corpus
@@ -74,15 +88,20 @@ class RNNClassifier(nn.Module):
                 cur_insts, cur_labels, cur_lengths = corpus_encoder.batch_to_tensors(
                                                         cur_insts, cur_labels, self.device)
 
+                self.train()
+
                 # forward pass
                 fwd_out = self.forward(cur_insts, cur_lengths, self.hidden_in)
 
                 # loss calculation
-                loss = self.loss(fwd_out, cur_labels)
+                loss = self.loss(fwd_out, cur_labels, weight_tensor=label_weights)
 
                 # backprop
                 optimizer.zero_grad()  # reset tensor gradients
                 loss.backward()  # compute gradients for network params w.r.t loss
+
+                # nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
+
                 optimizer.step()  # perform the gradient update step
 
                 # detach hidden nodes from the graph. IMP to prevent the graph from growing.
@@ -95,6 +114,15 @@ class RNNClassifier(nn.Module):
                     print('[%d, %5d] loss: %.3f' %
                           (i + 1, idx + 1, running_loss / 100))
                     running_loss = 0.0
+
+            y_pred, y_true = self.predict(corpus, corpus_encoder)
+            print("Train F1 score for all classes: ",
+                  f1_score(y_true=y_true, y_pred=y_pred, average=None))
+
+            if val_corpus:
+                y_pred_val, y_true_val = self.predict(val_corpus, corpus_encoder)
+                print("Validation F1 score for all classes: ",
+                      f1_score(y_true=y_true_val, y_pred=y_pred_val, average=None))
 
     def predict(self, corpus, corpus_encoder):
 
