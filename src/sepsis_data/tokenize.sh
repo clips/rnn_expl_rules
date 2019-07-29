@@ -7,7 +7,7 @@ test -d $dir_out || mkdir $dir_out
 
 for file in ls "$dir_in"*.txt
 do
-echo "Tokenizing $file"
+#echo "Tokenizing $file"
 fname=$(basename $file)
 ucto -L eng -n -l $file $dir_out$fname
 done
