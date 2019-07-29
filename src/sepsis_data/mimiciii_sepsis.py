@@ -18,7 +18,7 @@ ICD9_SEPSIS = "99591"
 ICD9_SEVERE_SEPSIS = "99592"
 ICD9_SEPTIC_SHOCK = "78552"
 
-PATH_MIMICIII_SEPSIS = '/home/madhumita/sepsis_mimiciii/'
+PATH_MIMICIII_SEPSIS = '/home/madhumita/sepsis_mimiciii_discharge/'
 PATH_MIMICIII_SEPSIS_TEXT = join(PATH_MIMICIII_SEPSIS, 'text')
 PATH_MIMICIII_SEPSIS_LABELS = join(PATH_MIMICIII_SEPSIS, 'labels')
 FNAME_LABELS = 'sepsis_labels.json'
@@ -83,17 +83,20 @@ class SepsisMIMIC:
         print("All categories of notes")
         print(set(notes_df['CATEGORY']))
 
-        print("Removing social work notes")
-        notes_df = notes_df[notes_df['CATEGORY'] != "Social Work"]
+        # print("Removing social work notes")
+        # notes_df = notes_df[notes_df['CATEGORY'] != "Social Work"]
+        #
+        # print("Removing rehabilitation notes ")
+        # notes_df = notes_df[notes_df['CATEGORY'] != "Rehab Services"]
+        #
+        # print("Removing nutrition notes ")
+        # notes_df = notes_df[notes_df['CATEGORY'] != "Nutrition"]
+        #
+        # print("Removing discharge notes to prevent direct mention of sepsis")
+        # notes_df = notes_df[notes_df['CATEGORY'] != "Discharge summary"]
 
-        print("Removing rehabilitation notes ")
-        notes_df = notes_df[notes_df['CATEGORY'] != "Rehab Services"]
-
-        print("Removing nutrition notes ")
-        notes_df = notes_df[notes_df['CATEGORY'] != "Nutrition"]
-
-        print("Removing discharge notes to prevent direct mention of sepsis")
-        notes_df = notes_df[notes_df['CATEGORY'] != "Discharge summary"]
+        print("Retaining only discharge notes")
+        notes_df = notes_df[notes_df['CATEGORY'] == "Discharge summary"]
 
         print("New categories, ", set(notes_df['CATEGORY']))
 
@@ -117,7 +120,7 @@ class SepsisMIMIC:
         print("Number of septic cases that mention sepsis: ", n_mention_sepsis)
 
         print("Serializing data")
-        label_dict = {}  # {"HADM_ID":"septic"/"non-septic"}
+        label_dict = {}  # {"HADM_ID":"septic"|"non-septic"}
         for hadm_id in note_subset['HADM_ID'].tolist():
             cur_label = note_subset[note_subset['HADM_ID'] == hadm_id]['SEPTIC'].item()
             label_dict[str(hadm_id)] = cur_label
