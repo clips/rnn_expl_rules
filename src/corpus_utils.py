@@ -6,29 +6,35 @@ from sklearn.model_selection import train_test_split
 import torch
 from os.path import realpath, join
 import json
+import numpy as np
+from random import shuffle
 
-#beginning of seq, end of seq, beg of line, end of line, unknown, padding symbol
+# beginning of seq, end of seq, beg of line, end of line, unknown, padding symbol
 BOS, EOS, BOL, EOL, UNK, PAD = '<s>', '</s>', '<bol>', '</bol>', '<unk>', '<pad>'
 
 
 class Vocab:
     def __init__(self):
-        self.word2idx = dict() #word to index lookup
-        self.idx2word = dict() #index to word lookup
+        self.word2idx = dict()  # word to index lookup
+        self.idx2word = dict()  # index to word lookup
 
-        self.reserved_sym = dict() #dictionary of reserved terms with corresponding symbols.
+        self.reserved_sym = dict()  # dictionary of reserved terms with corresponding symbols.
 
     @classmethod
     def populate_indices(cls, vocab_set, **reserved_sym):
         inst = cls()
 
-        for key, sym in reserved_sym.items(): #populate reserved symbols such as bos, eos, unk, pad
+        # populate reserved symbols such as bos, eos, unk, pad
+        for key, sym in reserved_sym.items():
             if sym in vocab_set:
                 print("Removing the reserved symbol {} from training corpus".format(sym))
-                del vocab_set[sym] #@todo: delete symbol from embedding space also
-            inst.word2idx.setdefault(sym, len(inst.word2idx))  # Add item with given default value if it does not exist.
-            inst.reserved_sym[key] = sym # Populate dictionary of reserved symbols. @todo: check data type of key. Var?
-            setattr(cls, key, inst.word2idx[sym]) # Add reserved symbols as class attributes with corresponding idx mapping
+                # @todo: delete symbol from embedding space also?
+                del vocab_set[sym]
+            # Add item with given default value if it does not exist.
+            inst.word2idx.setdefault(sym, len(inst.word2idx))
+            inst.reserved_sym[key] = sym  # Populate dictionary of reserved symbols.
+            # Add reserved symbols as class attributes with corresponding idx mapping
+            setattr(cls, key, inst.word2idx[sym])
 
         for term in vocab_set:
             inst.word2idx.setdefault(term, len(inst.word2idx))
@@ -54,7 +60,8 @@ class Vocab:
     @classmethod
     def from_dict(cls, d):
         inst = cls()
-        inst.word2idx = {d["key"]: d["val"] for d in d['word2idx']} #the paramter "d" here is the return value of to_dict function earlier.
+        # the paramter "d" here is the return value of to_dict function earlier.
+        inst.word2idx = {d["key"]: d["val"] for d in d['word2idx']}
         for key, val in d['reserved'].items():
             setattr(inst, key, inst.word2idx[val])
         inst.idx2word = {val: key for key, val in inst.word2idx.items()}
@@ -69,25 +76,34 @@ def dummy_processor(line):
 def encode_labels(fit_labels, transform_labels):
     le = LabelEncoder()
     le.fit(fit_labels)
-    print("Label classes: ", list(le.classes_), "respectively mapped to ", le.transform(le.classes_))
+    print("Label classes: ", list(le.classes_),
+          "respectively mapped to ", le.transform(le.classes_))
     return le.transform(transform_labels), le
 
 
 class Corpus:
     def __init__(self, dir_corpus, f_labels, dir_labels, fname_subset, subset_name,
-                 text_processor=dummy_processor, label_encoder = encode_labels):
+                 text_processor=dummy_processor, label_encoder=encode_labels,
+                 resample=False):
         self.dir_in = dir_corpus
         self.fname_subset = fname_subset  # file names for the current split of the corpus
         self.subset_name = subset_name
 
         all_labels = FileUtils.read_json(f_labels, dir_labels)
         self.labels = [all_labels[i] for i in self.fname_subset]
-        all_labels = list(all_labels.values())
-        self.labels, self.label_encoder = label_encoder(all_labels, self.labels)
+        self.labels, self.label_encoder = label_encoder(list(all_labels.values()),
+                                                        self.labels)
+
+        if resample:
+            self.fname_subset = DataUtils.downsample(self.fname_subset,
+                                                     self.labels)
+            resampled_labels = [all_labels[i] for i in self.fname_subset]
+            self.labels = self.label_encoder.transform(resampled_labels)
 
         self.text_processor = text_processor
 
     def __iter__(self):
+
         for cur_fname, cur_label in zip(self.fname_subset, self.labels):
             with open(realpath(join(self.dir_in, cur_fname + '.txt'))) as f:
                 word_seq = list()
@@ -120,7 +136,8 @@ class CorpusEncoder:
 
     def encode_inst(self, inst):
         """
-        Converts sentence to sequence of indices after adding beginning, end and replacing unk tokens.
+        Converts sentence to sequence of indices after adding beginning,
+        end and replacing unk tokens.
         """
         out = [self.transform_item(i) for i in inst]
         # if self.vocab.bos is not None:
@@ -180,13 +197,15 @@ class CorpusEncoder:
         lengths = [len(inst) for inst in cur_insts]
         n_inst, maxlen = len(cur_insts), max(lengths)
 
-        t = torch.zeros(n_inst, maxlen, dtype=torch.int64) + self.vocab.pad #this creates a tensor of padding indices
+        # this creates a tensor of padding indices
+        t = torch.zeros(n_inst, maxlen, dtype=torch.int64) + self.vocab.pad
 
         # copy the sequence
         for idx, (inst, length) in enumerate(zip(cur_insts, lengths)):
             t[idx, :length].copy_(torch.tensor(inst))
 
-        # contiguous() makes a copy of tensor so the order of elements would be same as if created from scratch.
+        # contiguous() makes a copy of tensor so the order of elements would be
+        # same as if created from scratch.
         t = t.t().contiguous().to(device)
         lengths = torch.tensor(lengths, dtype = torch.int).to(device)
 
@@ -202,10 +221,12 @@ class CorpusEncoder:
         return out
 
     def replace_unk(self, inst):
-        out = [self.vocab.idx2word[self.vocab.unk] if i not in self.vocab.word2idx else i for i in inst]
+        out = [self.vocab.idx2word[self.vocab.unk]
+               if i not in self.vocab.word2idx else i
+               for i in inst]
         return out
 
-    def get_decoded_sequences(self, corpus, strip_angular = False):
+    def get_decoded_sequences(self, corpus, strip_angular=False):
         instances = list()
 
         for (cur_inst, __) in iter(corpus):
@@ -250,7 +271,9 @@ class DataUtils:
 
     @staticmethod
     def create_splits(doc_ids, labels):
-        train_idx, rest_idx, __, rest_labels = train_test_split(doc_ids, labels, stratify=labels, test_size=0.2)
+        train_idx, rest_idx, __, rest_labels = train_test_split(doc_ids, labels,
+                                                                stratify=labels,
+                                                                test_size=0.2)
         val_idx, test_idx = train_test_split(rest_idx, stratify=rest_labels, test_size=0.5)
 
         return train_idx, val_idx, test_idx
@@ -262,3 +285,42 @@ class DataUtils:
         test_split = FileUtils.read_list('test_ids.txt', dir_splits)
 
         return train_split, val_split, test_split
+
+    @staticmethod
+    def downsample(idx, labels):
+        """
+        Downsamples the instances of all classes to the length of the minority class
+        :param idx: list of filename indices for all instances
+        :param labels: list of class labels for all instances, mapping idx
+        :return: new list of filename indices with all classes downsampled to minority class
+        """
+
+        print("Original length: ", len(idx))
+
+        inst_idx = dict()  # Indicies of each class' observations
+        n_insts = dict()  # Number of observations in each class
+
+        for cur_class in set(labels):
+            inst_idx[cur_class] = [idx[i] for i in np.where(labels == cur_class)[0]]
+            n_insts[cur_class] = len(inst_idx[cur_class])
+
+        # find class with min samples
+        min_class = min(n_insts, key=n_insts.get)
+        print("Retaining {} samples of each class".format(n_insts[min_class]))
+
+        new_idx = list()
+        # For every observation of min len class,
+        # randomly sample from other classes without replacement
+        for cur_class in inst_idx.keys():
+            downsampled = np.random.choice(inst_idx[cur_class],
+                                           size=n_insts[min_class],
+                                           replace=False)
+            new_idx.extend(downsampled)
+
+        # Shuffle sampled indices
+        shuffle(new_idx)
+
+        # print("New file subsets: ", new_idx)
+        print("New length: ", len(new_idx))
+
+        return new_idx
