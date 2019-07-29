@@ -98,7 +98,8 @@ class GRUClassifier(RNNClassifier):
                       'embedding_dim': self.emb_dim,
                       'dropout': self.dropout,
                       'label_size': self.n_labels,
-                      'batch_size': self.batch_size
+                      'batch_size': self.batch_size,
+                      'bidir': self.bidirectional
                       }
 
         # save model state

@@ -102,7 +102,8 @@ class LSTMClassifier(RNNClassifier):
                       'embedding_dim': self.emb_dim,
                       'label_size': self.n_labels,
                       'dropout': self.dropout,
-                      'batch_size': self.batch_size
+                      'batch_size': self.batch_size,
+                      'bidir': self.bidirectional
                       }
 
         # save model state
