@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.metrics import f1_score
+import numpy as np
 
 from random import shuffle
 
@@ -73,6 +74,9 @@ class RNNClassifier(nn.Module):
 
         optimizer = optimizer
 
+        # initialize the early_stopping object
+        early_stopping = EarlyStopping(is_lower_better=False, patience=5, verbose=True)
+
         for i in range(n_epochs):
 
             running_loss = 0.0
@@ -121,8 +125,18 @@ class RNNClassifier(nn.Module):
 
             if val_corpus:
                 y_pred_val, y_true_val = self.predict(val_corpus, corpus_encoder)
+                y_score_val = f1_score(y_true=y_true_val, y_pred=y_pred_val, average='macro')
                 print("Validation F1 score for all classes: ",
                       f1_score(y_true=y_true_val, y_pred=y_pred_val, average=None))
+
+                early_stopping(y_score_val, self)
+
+                if early_stopping.early_stop:
+                    print("Early stopping")
+                    break
+
+        # load the last checkpoint with the best model
+        self = self.load('checkpoint.pt')
 
     def predict(self, corpus, corpus_encoder):
 
@@ -198,3 +212,53 @@ class RNNClassifier(nn.Module):
             eval_obj.avg_prec_recall_f1_at_k_from_corpus(explanation.imp_scores, corpus, corpus_encoder, k = 15)
 
         return explanations
+
+
+class EarlyStopping:
+    """Early stops the training if validation loss doesn't improve after a given patience."""
+    def __init__(self, is_lower_better, patience=5, verbose=False):
+        """
+        Args:
+            is_lower_better (bool): If True, a lower value fo the val_metric is better.
+            patience (int): How long to wait after last time validation loss improved.
+                            Default: 7
+            verbose (bool): If True, prints a message for each validation loss improvement.
+                            Default: False
+        """
+        self.is_lower_better = is_lower_better
+        self.patience = patience
+        self.verbose = verbose
+        self.counter = 0
+        self.best_score = None
+        self.early_stop = False
+        self.val_metric_min = np.Inf
+
+    def __call__(self, val_metric, model):
+
+        if self.is_lower_better:
+            score = -val_metric
+        else:
+            score = val_metric
+
+        if self.best_score is None:
+            self.best_score = score
+            self.save_checkpoint(val_metric, model)
+        elif score < self.best_score:
+            self.counter += 1
+            print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_score = score
+            self.save_checkpoint(val_metric, model)
+            self.counter = 0
+
+    def save_checkpoint(self, val_metric, model):
+        """
+        Saves model when validation loss decrease.
+        """
+        if self.verbose:
+            print("Validation score changed from {} --> {}. Saving model ... ".format(
+                self.val_metric_min, val_metric))
+        model.save('checkpoint.pt')
+        self.val_metric_min = val_metric
