@@ -1,3 +1,6 @@
+import sys
+sys.path.append('/home/madhumita/PycharmProjects/sepsis/')
+
 from src.utils import FileUtils
 
 import pandas as pd
@@ -6,8 +9,7 @@ import numpy as np
 from os.path import realpath, join
 import statistics
 
-# PATH_MIMICIII = '/home/corpora/accumulate/mimiciii/'
-PATH_MIMICIII = '/home/madhumita/dataset/mimiciii/'
+PATH_MIMICIII = '/home/corpora/accumulate/mimiciii/'
 FNAME_DIAGNOSES = 'DIAGNOSES_ICD.csv.gz'
 FNAME_NOTES = 'NOTEEVENTS.csv.gz'
 
@@ -16,7 +18,7 @@ ICD9_SEPSIS = "99591"
 ICD9_SEVERE_SEPSIS = "99592"
 ICD9_SEPTIC_SHOCK = "78552"
 
-PATH_MIMICIII_SEPSIS = '/home/madhumita/dataset/sepsis_mimiciii/'
+PATH_MIMICIII_SEPSIS = '/home/madhumita/sepsis_mimiciii/'
 PATH_MIMICIII_SEPSIS_TEXT = join(PATH_MIMICIII_SEPSIS, 'text')
 PATH_MIMICIII_SEPSIS_LABELS = join(PATH_MIMICIII_SEPSIS, 'labels')
 FNAME_LABELS = 'sepsis_labels.json'
@@ -33,7 +35,7 @@ class SepsisMIMIC:
     def select_septic_hadm_id(self, diag_df, sepsis_codes):
         print("Getting septic HADM_IDs")
         hadm_ids = diag_df[diag_df['ICD9_CODE'].isin(sepsis_codes)]['HADM_ID']
-        print("Septic HADM_IDs \n", list(hadm_ids))
+        # print("Septic HADM_IDs \n", list(hadm_ids))
         return list(hadm_ids)
 
     def get_septic_notes(self, septic_hadm_ids,
@@ -51,7 +53,8 @@ class SepsisMIMIC:
         print("Converting text to lowercase")
         notes_df['TEXT'] = notes_df['TEXT'].str.lower()
 
-        print("Removing blank and NA entries from text and HADM ID")
+        print("Removing blank and NA entries from TEXT and HADM_ID columns")
+        notes_df['TEXT'].replace('', np.nan, inplace=True)
         notes_df.dropna(subset=['HADM_ID', 'TEXT'], inplace=True)
 
         print("Converting HADM ID to int")
@@ -94,7 +97,6 @@ class SepsisMIMIC:
 
         print("New categories, ", set(notes_df['CATEGORY']))
 
-
         print("Total Number of notes: ", notes_df.shape[0])
         print("Number of septic notes: ", notes_df[notes_df['SEPTIC'] == "septic"].shape[0])
 
@@ -114,9 +116,7 @@ class SepsisMIMIC:
 
         print("Number of septic cases that mention sepsis: ", n_mention_sepsis)
 
-
-        #serializing data
-
+        print("Serializing data")
         label_dict = {}  # {"HADM_ID":"septic"/"non-septic"}
         for hadm_id in note_subset['HADM_ID'].tolist():
             cur_label = note_subset[note_subset['HADM_ID'] == hadm_id]['SEPTIC'].item()
