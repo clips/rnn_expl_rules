@@ -15,14 +15,15 @@ import resource
 soft, hard = 5.4e+10, 5.4e+10  # nearly 50GB
 resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
 
-PATH_DIR_CORPUS = '/home/madhumita/sepsis_mimiciii/text/'
+PATH_DIR_IN = '/home/madhumita/sepsis_mimiciii/'
+PATH_DIR_CORPUS = join(PATH_DIR_IN, 'text/')
+PATH_DIR_LABELS = join(PATH_DIR_IN, 'labels/')
 FNAME_LABELS = 'sepsis_labels.json'
-PATH_DIR_LABELS = '/home/madhumita/sepsis_mimiciii/labels/'
-PATH_DIR_SPLITS = '/home/madhumita/sepsis_mimiciii/splits/'
 
-create_split = True
+PATH_DIR_SPLITS = join(PATH_DIR_IN, 'splits/')
+create_split = False
 
-load_encoder = False
+load_encoder = True
 FNAME_ENCODER = 'corpus_encoder_mimiciii.json'
 PATH_DIR_ENCODER = '../out/'
 
@@ -31,7 +32,6 @@ model_name = 'lstm'  # lstm|gru
 
 test_mode = 'val'  # val | test
 
-baseline = False
 
 def process_model():
     # get train, val, test splits
@@ -85,7 +85,7 @@ def process_model():
         optimizer = torch.optim.Adam(classifier.parameters(), lr=lr)
 
         classifier.train_model(train_corp, corpus_encoder, n_epochs, optimizer, val_corp)
-        classifier.save(f_model='sepsis_mimic'+
+        classifier.save(f_model='sepsis_mimic_' +
                                 model_name +
                                 '_classifier_hid' +
                                 str(net_params['hidden_dim']) +
@@ -101,7 +101,7 @@ def process_model():
                 f_model='sepsis_mimic_lstm_classifier_hid100_emb100.tar')
         elif model_name == 'gru':
             classifier = GRUClassifier.load(
-                f_model='sepsis_mimic_gru_mimic_classifier_hid50_emb50.tar')
+                f_model='sepsis_mimic_gru_classifier_hid50_emb50.tar')
         else:
             raise ValueError("Model should be either 'gru' or 'lstm'")
 
@@ -126,6 +126,6 @@ def process_model():
 def main():
     process_model()
 
+
 if __name__ == '__main__':
     main()
-
