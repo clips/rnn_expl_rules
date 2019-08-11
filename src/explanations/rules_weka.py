@@ -123,7 +123,7 @@ def optimize_rule_params(classifier, train_data, val_data, test_data, incrementa
     stats = train_data.attribute_stats(train_data.class_index)
     min_inst = min(stats.nominal_counts)
 
-    #works for binary setup
+    # works for binary setup
     if stats.nominal_counts[0] == min_inst:
         class_index = 0
     elif stats.nominal_counts[1] == min_inst:
@@ -139,15 +139,11 @@ def optimize_rule_params(classifier, train_data, val_data, test_data, incrementa
 
     best_n, best_model, best_eval, best_score = None, None, None, None
 
-    # start_n = 2
-    # stop_n = 11 if min_inst >= 10 else min_inst
-    # step = 1
     start_n = int(min_inst/1000)
     stop_n = int(min_inst/100)
     step = start_n
 
     for n in range(start_n, stop_n, step):
-    # for n in range(300, 301, 1):
 
         print("Minimum correctly covered instances: ", n)
 
@@ -200,7 +196,6 @@ def save_model(model, fname, dir_name):
 def load_model(fname, dir_name):
     outfile = realpath(join(dir_name, fname))
     model = Classifier(jobject=serialization.read(outfile))
-    print(model)
     return model
 
 def get_rule_covering_inst(classifier, data, inst_idx):
@@ -222,6 +217,42 @@ def get_rule_covering_inst(classifier, data, inst_idx):
             print("Instance is covered by current rule:", str(r.toString(ordered_data.class_attribute.jobject)))
             break
 
+
+def get_rule_complexity(model, rule_type):
+    print("Total number of rules: ",
+          get_n_rules(model, rule_type))
+    print("Total number of conditions in the rule set: ",
+          get_n_conditions(model, rule_type))
+
+
+def get_n_rules(model, rule_type):
+    if rule_type == 'jrip':
+        n_rules = int(model.jwrapper.getRuleset().size())
+    elif rule_type == 'part':
+        n_rules = int(model.jwrapper.measureNumRules())
+    else:
+        raise ValueError("Unsupported rule_type")
+
+    return n_rules
+
+
+def get_n_conditions(model, rule_type):
+
+    n_conds = 0
+    if rule_type == 'jrip':
+        rset = model.jwrapper.getRuleset()
+        for i in range(rset.size()):
+            n_conds += int(rset.get(i).size())
+    elif rule_type == 'part':
+        model_lines = str(model).split("\n\n")
+        for cur_line in model_lines:
+            if '=' in cur_line:  # is a rule
+                conds = cur_line.strip().split('AND')  # perhaps can replace with count of =
+                n_conds += len(conds)
+
+    return n_conds
+
+
 def _get_score(metric, evl, class_index):
     if metric == 'class-f-score':
         score = evl.f_measure(class_index)
@@ -240,7 +271,8 @@ def _get_score(metric, evl, class_index):
 
     return score
 
-def induce_explanations(classifier, opt_metric, train_data, val_data, test_data, data_dir, out_fname, dir_out):
+def induce_explanations(classifier, opt_metric, train_data, val_data, test_data,
+                        data_dir, out_fname, dir_out):
     """
     Induce the rules using RIPPERk (JRIP) or trees using C4.5
     :param classifier: string name of classification method to use
@@ -276,6 +308,8 @@ def induce_explanations(classifier, opt_metric, train_data, val_data, test_data,
 
         save_model(best_model, out_fname, dir_out)
 
+        get_rule_complexity(best_model, classifier)
+
         idx_to_explain = 6837
         print("Finding the rule that covers instance {} of validation data".format(idx_to_explain))
         if classifier == 'jrip':
@@ -287,14 +321,30 @@ def induce_explanations(classifier, opt_metric, train_data, val_data, test_data,
         stop_jvm()
 
 
+def get_stats():
+    start_jvm()
+
+    try:
+        model = load_model(out_fname, dir_out)
+        get_rule_complexity(model, classifier)
+
+    except Exception as e:
+        print(e)
+    finally:
+        stop_jvm()
+
+
 if __name__ == '__main__':
-    classifier = 'jrip'
+    classifier = 'part'
     optimize = 'macro-f-score'
-    train_data = 'lstm_hid50_emb100_synthetic_min1_max6_skip1_train_pred.arff'
-    val_data = 'lstm_hid50_emb100_synthetic_min1_max6_skip1_val_pred.arff'
-    test_data = 'lstm_hid50_emb100_synthetic_min1_masx6_skip1_test_pred.arff'
+    train_data = 'lstm_hid100_emb100_mimic_discharge_min1_max4_skip2_train_pred.arff'
+    val_data = 'lstm_hid100_emb100_mimic_discharge_min1_max4_skip2_val_pred.arff'
+    test_data = 'lstm_hid100_emb100_mimic_discharge_min1_max4_skip2_test_pred.arff'
     data_dir = '../../out/weka/'
 
     out_fname = classifier +'_'+ train_data.strip('.arff') + '.model'
     dir_out = '../../out/weka/'
+
     induce_explanations(classifier, optimize, train_data, val_data, test_data, data_dir, out_fname, dir_out )
+
+
