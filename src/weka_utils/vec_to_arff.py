@@ -43,7 +43,7 @@ def _write_relation(rel_name, dir_name, fname):
 
 def escape_attribute(attr_list):
 
-    attr_list = ['"' + attr.strip().replace('"', '\\"') + '"' for attr in attr_list]
+    attr_list = ['"' + attr.strip().replace('\\', '\\\\').replace('"', '\\"') + '"' for attr in attr_list]
 
     return attr_list
 
