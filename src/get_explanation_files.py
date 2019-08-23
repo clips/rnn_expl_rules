@@ -147,9 +147,8 @@ def main():
     classifier = load_model()
     train_corpus, val_corpus, test_corpus, corpus_encoder = load_corpora()
 
-    if baseline:
-        write_baseline_expl_files(classifier,
-                                  train_corpus, val_corpus, test_corpus, corpus_encoder)
+    write_baseline_expl_files(classifier,
+                              train_corpus, val_corpus, test_corpus, corpus_encoder)
 
     write_explanation_files(classifier, train_corpus, val_corpus, test_corpus, corpus_encoder)
 
