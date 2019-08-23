@@ -27,10 +27,11 @@ load_encoder = True
 FNAME_ENCODER = 'corpus_encoder_mimiciii.json'
 PATH_DIR_ENCODER = '../out/'
 
-train_model = True
+train_model = False
 model_name = 'lstm'  # lstm|gru
 
-test_mode = 'val'  # val | test
+# test_mode = 'val'  # val | test
+test_mode = 'test'  # val | test
 
 
 def process_model():
