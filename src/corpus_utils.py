@@ -111,6 +111,11 @@ class Corpus:
                     word_seq.extend(self.text_processor(line))
                 yield (word_seq, cur_label)
 
+    def get_class_distribution(self):
+        for cur_label in set(self.labels):
+            print("Percentage of instances for class{}: {}".
+                  format(cur_label, sum(self.labels==cur_label)/len(self.labels)*100))
+
 
 class CorpusEncoder:
 

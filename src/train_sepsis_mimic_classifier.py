@@ -27,10 +27,10 @@ load_encoder = True
 FNAME_ENCODER = 'corpus_encoder_mimiciii_discharge.json'
 PATH_DIR_ENCODER = '../out/'
 
-train_model = True
+train_model = False
 model_name = 'lstm'  # lstm|gru
 
-test_mode = 'val'  # val | test
+test_mode = 'test'  # val | test
 
 
 def process_model():
@@ -60,6 +60,8 @@ def process_model():
             makedirs(PATH_DIR_ENCODER)
         # serialize encoder
         corpus_encoder.to_json(FNAME_ENCODER, PATH_DIR_ENCODER)
+
+    train_corp.get_class_distribution()
 
     if train_model:
         net_params = {'n_layers': 2,
