@@ -62,6 +62,7 @@ def process_model():
         corpus_encoder.to_json(FNAME_ENCODER, PATH_DIR_ENCODER)
 
     train_corp.get_class_distribution()
+    print("Vocab size: ", len(corpus_encoder.vocab))
 
     if train_model:
         net_params = {'n_layers': 2,
