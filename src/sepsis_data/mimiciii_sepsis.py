@@ -83,18 +83,6 @@ class SepsisMIMIC:
         print("All categories of notes")
         print(set(notes_df['CATEGORY']))
 
-        # print("Removing social work notes")
-        # notes_df = notes_df[notes_df['CATEGORY'] != "Social Work"]
-        #
-        # print("Removing rehabilitation notes ")
-        # notes_df = notes_df[notes_df['CATEGORY'] != "Rehab Services"]
-        #
-        # print("Removing nutrition notes ")
-        # notes_df = notes_df[notes_df['CATEGORY'] != "Nutrition"]
-        #
-        # print("Removing discharge notes to prevent direct mention of sepsis")
-        # notes_df = notes_df[notes_df['CATEGORY'] != "Discharge summary"]
-
         print("Retaining only discharge notes")
         notes_df = notes_df[notes_df['CATEGORY'] == "Discharge summary"]
 
@@ -108,24 +96,21 @@ class SepsisMIMIC:
         print("Number of septic notes after selecting last note per admission: ",
               note_subset[note_subset['SEPTIC'] == "septic"].shape[0])
 
-        hadm_ids = list(note_subset[note_subset['SEPTIC'] == "septic"]['HADM_ID'])
-
-        n_mention_sepsis = 0
-
-        for hadm_id in hadm_ids:
-            if 'sepsis' in note_subset[note_subset['HADM_ID'] == hadm_id]['TEXT'].item():
-                n_mention_sepsis += 1
-                # print(note_subset[note_subset['HADM_ID'] == hadm_id]['TEXT'].item())
-
-        print("Number of septic cases that mention sepsis: ", n_mention_sepsis)
+        # septic_hadm_ids = list(note_subset[note_subset['SEPTIC'] == "septic"]['HADM_ID'])
+        # n_mention_sepsis = 0
+        # for cur_hadm_id in septic_hadm_ids:
+        #     if 'sepsis' in note_subset[note_subset['HADM_ID'] == cur_hadm_id]['TEXT'].item():
+        #         n_mention_sepsis += 1
+        #         # print(note_subset[note_subset['HADM_ID'] == hadm_id]['TEXT'].item())
+        # print("Number of septic cases that mention sepsis: ", n_mention_sepsis)
 
         print("Serializing data")
         label_dict = {}  # {"HADM_ID":"septic"|"non-septic"}
-        for hadm_id in note_subset['HADM_ID'].tolist():
-            cur_label = note_subset[note_subset['HADM_ID'] == hadm_id]['SEPTIC'].item()
-            label_dict[str(hadm_id)] = cur_label
-            text = note_subset[note_subset['HADM_ID'] == hadm_id]['TEXT'].item()
-            FileUtils.write_txt(text, str(hadm_id)+'.txt', PATH_MIMICIII_SEPSIS_TEXT)
+        for cur_hadm_id in note_subset['HADM_ID'].tolist():
+            cur_label = note_subset[note_subset['HADM_ID'] == cur_hadm_id]['SEPTIC'].item()
+            label_dict[str(cur_hadm_id)] = cur_label
+            text = note_subset[note_subset['HADM_ID'] == cur_hadm_id]['TEXT'].item()
+            FileUtils.write_txt(text, str(cur_hadm_id)+'.txt', PATH_MIMICIII_SEPSIS_TEXT)
 
         # write labels json file
         FileUtils.write_json(label_dict, FNAME_LABELS, PATH_MIMICIII_SEPSIS_LABELS)
