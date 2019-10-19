@@ -69,7 +69,9 @@ class Vocab:
         return inst
 
 
-def dummy_processor(line):
+def dummy_processor(line, lower=True):
+    if lower:
+        line = line.lower()
     return line.strip().split()
 
 
@@ -86,30 +88,51 @@ class Corpus:
                  text_processor=dummy_processor, label_encoder=encode_labels,
                  resample=False):
         self.dir_in = dir_corpus
-        self.fname_subset = fname_subset  # file names for the current split of the corpus
+        self.subset_ids = fname_subset  # file names for the current split of the corpus
         self.subset_name = subset_name
 
         all_labels = FileUtils.read_json(f_labels, dir_labels)
-        self.labels = [all_labels[i] for i in self.fname_subset]
+        self.labels = [all_labels[i] for i in self.subset_ids]
         self.labels, self.label_encoder = label_encoder(list(all_labels.values()),
                                                         self.labels)
 
         if resample:
-            self.fname_subset = DataUtils.downsample(self.fname_subset,
-                                                     self.labels)
-            resampled_labels = [all_labels[i] for i in self.fname_subset]
+            self.subset_ids = DataUtils.downsample(self.subset_ids,
+                                                   self.labels)
+            resampled_labels = [all_labels[i] for i in self.subset_ids]
             self.labels = self.label_encoder.transform(resampled_labels)
 
         self.text_processor = text_processor
 
     def __iter__(self):
 
-        for cur_fname, cur_label in zip(self.fname_subset, self.labels):
+        for cur_fname, cur_label in zip(self.subset_ids, self.labels):
             with open(realpath(join(self.dir_in, cur_fname + '.txt'))) as f:
                 word_seq = list()
                 for line in f:
                     word_seq.extend(self.text_processor(line))
                 yield (word_seq, cur_label)
+
+    def get_class_distribution(self):
+        for cur_label in set(self.labels):
+            print("Percentage of instances for class{}: {}".
+                  format(cur_label, sum(self.labels==cur_label)/len(self.labels)*100))
+
+
+class TorchNLPCorpus:
+    def __init__(self, torchnlp_dataset, subset_name, all_labels,
+                 label_encoder=encode_labels):
+        self.dataset = torchnlp_dataset
+        self.subset_name = subset_name
+        self.subset_ids = [i for i in range(len(self.dataset.examples))]
+
+        labels = [cur_inst.label[0] for cur_inst in self.dataset.examples]
+        self.labels, self.label_encoder = label_encoder(all_labels, labels)
+
+    def __iter__(self):
+
+        for i, inst in enumerate(self.dataset.examples):
+            yield (inst.text, self.labels[i])
 
     def get_class_distribution(self):
         for cur_label in set(self.labels):

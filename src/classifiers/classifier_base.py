@@ -5,7 +5,7 @@ from src.explanations.grads import Explanation
 import torch.nn as nn
 import torch
 from sklearn.utils.class_weight import compute_class_weight
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, accuracy_score
 import numpy as np
 
 from random import shuffle
@@ -82,9 +82,9 @@ class RNNClassifier(nn.Module):
             running_loss = 0.0
 
             # shuffle the corpus
-            combined = list(zip(corpus.fname_subset, corpus.labels))
+            combined = list(zip(corpus.subset_ids, corpus.labels))
             shuffle(combined)
-            corpus.fname_subset, corpus.labels = zip(*combined)
+            corpus.subset_ids, corpus.labels = zip(*combined)
 
             # get train batch
             for idx, (cur_insts, cur_labels) in enumerate(
@@ -120,14 +120,17 @@ class RNNClassifier(nn.Module):
                     running_loss = 0.0
 
             y_pred, y_true = self.predict(corpus, corpus_encoder)
-            print("Train F1 score for all classes: ",
-                  f1_score(y_true=y_true, y_pred=y_pred, average=None))
+            print("Train accuracy: ",
+                  accuracy_score(y_true=y_true, y_pred=y_pred))
 
             if val_corpus:
                 y_pred_val, y_true_val = self.predict(val_corpus, corpus_encoder)
-                y_score_val = f1_score(y_true=y_true_val, y_pred=y_pred_val, average='macro')
-                print("Validation F1 score for all classes: ",
-                      f1_score(y_true=y_true_val, y_pred=y_pred_val, average=None))
+                y_score_val = accuracy_score(y_true=y_true_val, y_pred=y_pred_val)
+                print("Validation set accuracy: ", y_score_val)
+
+                # y_score_val = f1_score(y_true=y_true_val, y_pred=y_pred_val, average='macro')
+                # print("Validation F1 score for all classes: ",
+                #       f1_score(y_true=y_true_val, y_pred=y_pred_val, average=None))
 
                 early_stopping(y_score_val, self)
 
@@ -209,7 +212,7 @@ class RNNClassifier(nn.Module):
             explanation = Explanation.get_grad_importance(cur_method, self, corpus, corpus_encoder)
             explanations[cur_method] = explanation
 
-            eval_obj.avg_prec_recall_f1_at_k_from_corpus(explanation.imp_scores, corpus, corpus_encoder, k = 15)
+            eval_obj.avg_prec_recall_f1_at_k_from_corpus(explanation.imp_scores, corpus, corpus_encoder, k=15)
 
         return explanations
 
