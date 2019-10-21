@@ -6,6 +6,7 @@ from sklearn.model_selection import train_test_split
 import torch
 from os.path import realpath, join
 import json
+import csv
 import numpy as np
 from random import shuffle
 
@@ -139,6 +140,44 @@ class TorchNLPCorpus:
             print("Percentage of instances for class{}: {}".
                   format(cur_label, sum(self.labels==cur_label)/len(self.labels)*100))
 
+
+class SST2Corpus:
+    def __init__(self, fname_corpus, dir_in, subset_name, text_processor):
+        self.fname_corpus = fname_corpus
+        self.dir_in = dir_in
+        self.subset_name = subset_name
+        self.text_processor = text_processor
+
+        self.init_subset_ids_labels()
+
+    def init_subset_ids_labels(self):
+        self.subset_ids = list()
+        self.labels = list()
+
+        with open(realpath(join(self.dir_in, self.fname_corpus))) as csvfile:
+            reader = csv.reader(csvfile, delimiter=',')
+            for i, row in enumerate(reader):
+                if i == 0:
+                    continue
+                self.subset_ids.append(i-1)
+                self.labels.append(int(row[0]))
+
+    def __iter__(self):
+
+        with open(realpath(join(self.dir_in, self.fname_corpus))) as csvfile:
+            reader = csv.reader(csvfile, delimiter=',')
+            for i, row in enumerate(reader):
+                if i == 0:
+                    continue
+                else:
+                    tokens = [str(i) for i in self.text_processor(row[1].lower())]
+                    label = int(row[0])
+                    yield(tokens, label)
+
+    def get_class_distribution(self):
+        for cur_label in set(self.labels):
+            print("Percentage of instances for class{}: {}".
+                  format(cur_label, sum(self.labels==cur_label)/len(self.labels)*100))
 
 class CorpusEncoder:
 

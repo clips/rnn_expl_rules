@@ -1,13 +1,13 @@
 import sys
 sys.path.append('/home/madhumita/PycharmProjects/sepsis/')
 
-from src.corpus_utils import TorchNLPCorpus, CorpusEncoder
+from src.corpus_utils import SST2Corpus, CorpusEncoder
 from src.classifiers.lstm import LSTMClassifier
 
 import torch
-from torchtext import data, datasets
 
-from sklearn.metrics import f1_score, accuracy_score, confusion_matrix
+from spacy.lang.en import English
+from sklearn.metrics import f1_score, accuracy_score
 
 from os.path import exists, realpath, join
 from os import makedirs
@@ -16,12 +16,12 @@ import resource
 soft, hard = 5.4e+10, 5.4e+10  # nearly 50GB
 resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
 
-PATH_DIR_IN = '/home/madhumita/sentiment/'
-PATH_DIR_CORPUS = PATH_DIR_IN
-PATH_DIR_LABELS = PATH_DIR_IN
-FNAME_LABELS = 'sentiment_labels.json'
+PATH_DIR_CORPUS = '../dataset/sst2/'
+FNAME_TRAIN = 'train_binary_sent.csv'
+FNAME_VAL = 'dev_binary_sent.csv'
+FNAME_TEST = 'test_binary_sent.csv'
 
-load_encoder = False
+load_encoder = True
 FNAME_ENCODER = 'corpus_encoder_sentiment.json'
 PATH_DIR_ENCODER = '../out/'
 
@@ -32,20 +32,19 @@ model_name = 'lstm'  # lstm|gru
 test_mode = 'test'  # val | test
 
 
+def init_spacy_eng_tokenizer():
+    nlp = English()
+    tokenizer = nlp.Defaults.create_tokenizer(nlp)
+    return tokenizer
+
+
 def process_model():
-    # get train, val, test splits
 
-    # use default configurations
+    tokenizer = init_spacy_eng_tokenizer()
 
-    TEXT = data.Field()
-    LABEL = data.Field()
-    (train_split, val_split, test_split) = datasets.SST.splits(TEXT, LABEL)
-    train_labels = [cur_inst.label[0] for cur_inst in train_split.examples]
-
-    # initialize corpora
-    train_corp = TorchNLPCorpus(train_split, 'train', train_labels)
-    val_corp = TorchNLPCorpus(val_split, 'val', train_labels)
-    test_corp = TorchNLPCorpus(test_split, 'test', train_labels)
+    train_corp = SST2Corpus(FNAME_TRAIN, PATH_DIR_CORPUS, 'train', tokenizer)
+    val_corp = SST2Corpus(FNAME_VAL, PATH_DIR_CORPUS, 'val', tokenizer)
+    test_corp = SST2Corpus(FNAME_TEST, PATH_DIR_CORPUS, 'test', tokenizer)
 
     if load_encoder:
         if not exists(realpath(join(PATH_DIR_ENCODER, FNAME_ENCODER))):
@@ -65,12 +64,12 @@ def process_model():
 
     if train_model:
         net_params = {'n_layers': 1,
-                      'hidden_dim': 150,
+                      'hidden_dim': 100,
                       'vocab_size': corpus_encoder.vocab.size,
                       'padding_idx': corpus_encoder.vocab.pad,
                       'embedding_dim': 300,
                       'dropout': 0.,
-                      'label_size': 3,
+                      'label_size': 2,
                       'batch_size': 64,
                       'bidir': True
                       }

@@ -337,9 +337,9 @@ def get_stats():
 if __name__ == '__main__':
     classifier = 'part'
     optimize = 'macro-f-score'
-    train_data = 'lstm_hid100_emb100_mimic_min1_max4_skip2_train_pred.arff'
-    val_data = 'lstm_hid100_emb100_mimic_min1_max4_skip2_val_pred.arff'
-    test_data = 'lstm_hid100_emb100_mimic_min1_max4_skip2_test_pred.arff'
+    train_data = 'lstm_hid150_emb300_sst2_min1_max4_skip2_train_pred.arff'
+    val_data = 'lstm_hid150_emb300_sst2_min1_max4_skip2_val_pred.arff'
+    test_data = 'lstm_hid150_emb300_sst2_min1_max4_skip2_test_pred.arff'
     data_dir = '../../out/weka/'
 
     out_fname = classifier +'_'+ train_data.strip('.arff') + '.model'
