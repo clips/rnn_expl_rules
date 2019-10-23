@@ -29,7 +29,6 @@ class Vocab:
         for key, sym in reserved_sym.items():
             if sym in vocab_set:
                 print("Removing the reserved symbol {} from training corpus".format(sym))
-                # @todo: delete symbol from embedding space also?
                 del vocab_set[sym]
             # Add item with given default value if it does not exist.
             inst.word2idx.setdefault(sym, len(inst.word2idx))

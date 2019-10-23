@@ -3,6 +3,7 @@ sys.path.append('/home/madhumita/PycharmProjects/sepsis/')
 
 from src.corpus_utils import SST2Corpus, CorpusEncoder
 from src.classifiers.lstm import LSTMClassifier
+from src.utils import EmbeddingUtils, FileUtils
 
 import torch
 
@@ -20,6 +21,12 @@ PATH_DIR_CORPUS = '../dataset/sst2/'
 FNAME_TRAIN = 'train_binary_sent.csv'
 FNAME_VAL = 'dev_binary_sent.csv'
 FNAME_TEST = 'test_binary_sent.csv'
+PATH_DIR_OUT = '../out/'
+
+PATH_DIR_EMBS = '/home/corpora/word_embeddings/'
+FNAME_EMBS = 'glove.840B.300d.txt'
+N_DIM_EMBS = 300
+embs_from_disk = True
 
 load_encoder = True
 FNAME_ENCODER = 'corpus_encoder_sentiment.json'
@@ -62,12 +69,27 @@ def process_model():
 
     print("Vocab size:", len(corpus_encoder.vocab))
 
+    # get embedding weights matrix
+    if embs_from_disk:
+        print("Loading word embeddings matrix ...")
+        FileUtils.read_numpy('pretrained_embs.npy', PATH_DIR_OUT)
+    else:
+        weights = EmbeddingUtils.get_embedding_weight(FNAME_EMBS,
+                                                      PATH_DIR_EMBS,
+                                                      N_DIM_EMBS,
+                                                      corpus_encoder.vocab.word2idx)
+        print("Saving word embeddings matrix ...")
+        FileUtils.write_numpy(weights, 'pretrained_embs.npy', PATH_DIR_OUT)
+
+    weights = torch.from_numpy(weights).type(torch.FloatTensor)
+
     if train_model:
         net_params = {'n_layers': 1,
-                      'hidden_dim': 100,
+                      'hidden_dim': 150,
                       'vocab_size': corpus_encoder.vocab.size,
                       'padding_idx': corpus_encoder.vocab.pad,
                       'embedding_dim': 300,
+                      'emb_weights': weights,
                       'dropout': 0.,
                       'label_size': 2,
                       'batch_size': 64,

@@ -18,7 +18,8 @@ class LSTMClassifier(RNNClassifier):
                  dropout,
                  label_size,
                  batch_size,
-                 bidir=False):
+                 bidir=False,
+                 emb_weights=None,):
         super().__init__(batch_size)
 
         self.model_type = 'lstm'
@@ -35,7 +36,9 @@ class LSTMClassifier(RNNClassifier):
         self.hidden_in = self.init_hidden()  # initialize cell states
 
         # self.word_embeddings = nn.Embedding(self.vocab_size, self.emb_dim, padding_idx=padding_idx).to(self.device) #embedding layer, initialized at random
-        self.word_embeddings = CustomEmbedding(self.vocab_size, self.emb_dim, padding_idx=padding_idx) #embedding layer, initialized at random
+        self.word_embeddings = CustomEmbedding(self.vocab_size, self.emb_dim,
+                                               padding_idx=padding_idx,
+                                               _weight=emb_weights) #embedding layer, initialized at random
 
         # lstm layers
         self.lstm = nn.LSTM(self.emb_dim, self.hidden_dim,
