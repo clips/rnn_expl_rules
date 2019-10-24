@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/home/madhumita/PycharmProjects/sepsis/')
+sys.path.append('/home/madhumita/PycharmProjects/rnn_expl_rules/')
 
 from src.clamp.clamp_proc import Clamp
 from src.utils import FileUtils
@@ -116,7 +116,7 @@ class SepsisTemplate:
         for i in range(self.n_sepsis_sample_docs + self.n_negative_docs):
 
             if i < self.n_sepsis_sample_docs:
-                #populating sepsis sample docs
+                #populating rnn_expl_rules sample docs
                 sent_list = self._get_septic_sentence_shortlist()
             else:
                 #populating negative docs

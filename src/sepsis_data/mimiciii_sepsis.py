@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/home/madhumita/PycharmProjects/sepsis/')
+sys.path.append('/home/madhumita/PycharmProjects/rnn_expl_rules/')
 
 from src.utils import FileUtils
 
@@ -13,7 +13,7 @@ PATH_MIMICIII = '/home/corpora/accumulate/mimiciii/'
 FNAME_DIAGNOSES = 'DIAGNOSES_ICD.csv.gz'
 FNAME_NOTES = 'NOTEEVENTS.csv.gz'
 
-# ICD-9-CM codes for sepsis, severe sepsis and septic shock
+# ICD-9-CM codes for rnn_expl_rules, severe rnn_expl_rules and septic shock
 ICD9_SEPSIS = "99591"
 ICD9_SEVERE_SEPSIS = "99592"
 ICD9_SEPTIC_SHOCK = "78552"
@@ -92,7 +92,7 @@ class SepsisMIMIC:
         print("Removing nutrition notes ")
         notes_df = notes_df[notes_df['CATEGORY'] != "Nutrition"]
 
-        print("Removing discharge notes to prevent direct mention of sepsis")
+        print("Removing discharge notes to prevent direct mention of rnn_expl_rules")
         notes_df = notes_df[notes_df['CATEGORY'] != "Discharge summary"]
 
         print("New categories, ", set(notes_df['CATEGORY']))
@@ -110,11 +110,11 @@ class SepsisMIMIC:
         n_mention_sepsis = 0
 
         for hadm_id in hadm_ids:
-            if 'sepsis' in note_subset[note_subset['HADM_ID'] == hadm_id]['TEXT'].item():
+            if 'rnn_expl_rules' in note_subset[note_subset['HADM_ID'] == hadm_id]['TEXT'].item():
                 n_mention_sepsis += 1
                 # print(note_subset[note_subset['HADM_ID'] == hadm_id]['TEXT'].item())
 
-        print("Number of septic cases that mention sepsis: ", n_mention_sepsis)
+        print("Number of septic cases that mention rnn_expl_rules: ", n_mention_sepsis)
 
         print("Serializing data")
         label_dict = {}  # {"HADM_ID":"septic"/"non-septic"}

@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/home/madhumita/PycharmProjects/sepsis/')
+sys.path.append('/home/madhumita/PycharmProjects/rnn_expl_rules/')
 
 from src.corpus_utils import SST2Corpus, CorpusEncoder
 from src.classifiers.lstm import LSTMClassifier

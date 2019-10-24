@@ -69,8 +69,8 @@ class AnchorExp:
         print('\n'.join([x[0] for x in exp.examples(partial_index=0, only_different_prediction=True)]))
 
 if __name__ == '__main__':
-    model = LSTMClassifier.load('lstm_classifier_hid50_emb100.tar', '/home/madhumita/PycharmProjects/sepsis/out/')
-    encoder = CorpusEncoder.from_json('corpus_encoder.json', '/home/madhumita/PycharmProjects/sepsis/out/')
+    model = LSTMClassifier.load('lstm_classifier_hid50_emb100.tar', '/home/madhumita/PycharmProjects/rnn_expl_rules/out/')
+    encoder = CorpusEncoder.from_json('corpus_encoder.json', '/home/madhumita/PycharmProjects/rnn_expl_rules/out/')
 
     # no anchors obtained on setting it to False. @todo: Probe why
     use_unk = True
