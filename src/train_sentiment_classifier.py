@@ -72,7 +72,7 @@ def process_model():
     # get embedding weights matrix
     if embs_from_disk:
         print("Loading word embeddings matrix ...")
-        FileUtils.read_numpy('pretrained_embs.npy', PATH_DIR_OUT)
+        weights = FileUtils.read_numpy('pretrained_embs.npy', PATH_DIR_OUT)
     else:
         weights = EmbeddingUtils.get_embedding_weight(FNAME_EMBS,
                                                       PATH_DIR_EMBS,
@@ -93,7 +93,7 @@ def process_model():
                       'dropout': 0.,
                       'label_size': 2,
                       'batch_size': 64,
-                      'bidir': True
+                      'bidir': False
                       }
 
         classifier = LSTMClassifier(**net_params)
