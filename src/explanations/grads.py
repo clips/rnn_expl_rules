@@ -91,9 +91,13 @@ class Explanation:
 
         seqs = self.corpus_encoder.get_decoded_sequences(self.corpus, strip_angular=True)
 
-        label_mapping = {0: "negative", 1: "positive"}
-        golds = [label_mapping[i] for i in self.corpus.labels]
-        preds = [label_mapping[i] for i in self.preds]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            golds = self.corpus.label_encoder.inverse_transform(self.corpus.labels)
+            preds = self.corpus.label_encoder.inverse_transform(self.preds)
+
+            if not isinstance(golds, list): golds = golds.tolist()
+            if not isinstance(preds, list): preds = preds.tolist()
 
         # saving the sequences, the importance scores, and the gold and predicted labels as JSON file
 

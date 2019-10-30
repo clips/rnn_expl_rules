@@ -83,6 +83,22 @@ def encode_labels(fit_labels, transform_labels):
     return le.transform(transform_labels), le
 
 
+class BinaryLabelEncoder:
+    def __init__(self, label_dict={'positive': 1, 'negative': 0}):
+        self.label2idx = label_dict
+        self.idx2label = dict()
+        for label in label_dict.keys():
+            self.idx2label[self.label2idx[label]] = label
+
+    def transform(self, labels):
+        transformed_labels = [self.label2idx[label] for label in labels]
+        return transformed_labels
+
+    def inverse_transform(self, labels):
+        transformed_labels = [self.idx2label[label] for label in labels]
+        return transformed_labels
+
+
 class Corpus:
     def __init__(self, dir_corpus, f_labels, dir_labels, fname_subset, subset_name,
                  text_processor=dummy_processor, label_encoder=encode_labels,
@@ -141,11 +157,14 @@ class TorchNLPCorpus:
 
 
 class SST2Corpus:
-    def __init__(self, fname_corpus, dir_in, subset_name, text_processor):
+    def __init__(self, fname_corpus, dir_in, subset_name,
+                 text_processor,
+                 le=BinaryLabelEncoder):
         self.fname_corpus = fname_corpus
         self.dir_in = dir_in
         self.subset_name = subset_name
         self.text_processor = text_processor
+        self.label_encoder = le()
 
         self.init_subset_ids_labels()
 
@@ -177,6 +196,7 @@ class SST2Corpus:
         for cur_label in set(self.labels):
             print("Percentage of instances for class{}: {}".
                   format(cur_label, sum(self.labels==cur_label)/len(self.labels)*100))
+
 
 class CorpusEncoder:
 
