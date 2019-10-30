@@ -90,10 +90,14 @@ class Explanation:
     def save(self, fname, dir_out='../out/'):
 
         seqs = self.corpus_encoder.get_decoded_sequences(self.corpus, strip_angular=True)
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            golds = self.corpus.label_encoder.inverse_transform(self.corpus.labels).tolist()
-            preds = self.corpus.label_encoder.inverse_transform(self.preds).tolist()
+            golds = self.corpus.label_encoder.inverse_transform(self.corpus.labels)
+            preds = self.corpus.label_encoder.inverse_transform(self.preds)
+
+            if not isinstance(golds, list): golds = golds.tolist()
+            if not isinstance(preds, list): preds = preds.tolist()
 
         # saving the sequences, the importance scores, and the gold and predicted labels as JSON file
 

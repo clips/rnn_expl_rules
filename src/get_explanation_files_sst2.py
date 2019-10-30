@@ -1,9 +1,8 @@
 import sys
 sys.path.append('/home/madhumita/PycharmProjects/rnn_expl_rules/')
 
-from src.corpus_utils import DataUtils, Corpus, CorpusEncoder
+from src.corpus_utils import DataUtils, SST2Corpus, CorpusEncoder
 from src.classifiers.lstm import LSTMClassifier
-from src.classifiers.gru import GRUClassifier
 from src.explanations.grads import Explanation
 from src.explanations.imp_sg import SeqImpSkipGram
 from src.explanations.expl_orig_input import SeqSkipGram
@@ -12,15 +11,18 @@ from src.weka_utils.vec_to_arff import get_feat_dict, write_arff_file
 from os.path import exists, realpath, join
 import resource
 
+from spacy.lang.en import English
+
 soft, hard = 5.4e+10, 5.4e+10  # nearly 50GB
 resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
 
-PATH_DIR_CORPUS = '/home/madhumita/sepsis_mimiciii/text/'
-FNAME_LABELS = 'sepsis_labels.json'
-PATH_DIR_LABELS = '/home/madhumita/sepsis_mimiciii/labels/'
-PATH_DIR_SPLITS = '/home/madhumita/sepsis_mimiciii/splits/'
 
-FNAME_ENCODER = 'corpus_encoder_mimiciii.json'
+PATH_DIR_CORPUS = '../dataset/sst2/'
+FNAME_TRAIN = 'train_binary_sent.csv'
+FNAME_VAL = 'dev_binary_sent.csv'
+FNAME_TEST = 'test_binary_sent.csv'
+
+FNAME_ENCODER = 'corpus_encoder_sentiment.json'
 PATH_DIR_ENCODER = '../out/'
 
 model_name = 'lstm'  # lstm|gru
@@ -29,26 +31,27 @@ test_mode = 'test'  # val | test
 baseline = False
 
 
+def init_spacy_eng_tokenizer():
+    nlp = English()
+    tokenizer = nlp.Defaults.create_tokenizer(nlp)
+    return tokenizer
+
+
 def load_model():
-    if model_name == 'lstm':
-        classifier = LSTMClassifier.load(
-            f_model='sepsis_mimic_lstm_classifier_hid100_emb100.tar')
-    elif model_name == 'gru':
-        classifier = GRUClassifier.load(
-            f_model='sepsis_mimic_gru_classifier_hid50_emb50.tar')
-    else:
-        raise ValueError("Model should be either 'gru' or 'lstm'")
+    classifier = LSTMClassifier.load(
+        f_model='sentiment_lstm_classifier_hid150_emb300.tar')
 
     return classifier
 
 
 def load_corpora():
-    train_split, val_split, test_split = DataUtils.read_splits(PATH_DIR_SPLITS)
 
     # initialize corpora
-    train_corp = Corpus(PATH_DIR_CORPUS, FNAME_LABELS, PATH_DIR_LABELS, train_split, 'train')
-    val_corp = Corpus(PATH_DIR_CORPUS, FNAME_LABELS, PATH_DIR_LABELS, val_split, 'val')
-    test_corp = Corpus(PATH_DIR_CORPUS, FNAME_LABELS, PATH_DIR_LABELS, test_split, 'test')
+    tokenizer = init_spacy_eng_tokenizer()
+
+    train_corp = SST2Corpus(FNAME_TRAIN, PATH_DIR_CORPUS, 'train', tokenizer)
+    val_corp = SST2Corpus(FNAME_VAL, PATH_DIR_CORPUS, 'val', tokenizer)
+    test_corp = SST2Corpus(FNAME_TEST, PATH_DIR_CORPUS, 'test', tokenizer)
 
     if not exists(realpath(join(PATH_DIR_ENCODER, FNAME_ENCODER))):
         raise FileNotFoundError("Encoder not found")
@@ -60,11 +63,10 @@ def load_corpora():
 
 def write_baseline_expl_files(classifier, train_corp, val_corp, test_corp, corpus_encoder):
 
-    if baseline:
-        train_sg = get_sg_baseline(train_corp, classifier, corpus_encoder)
-        val_sg = get_sg_baseline(val_corp, classifier, corpus_encoder, vocab=train_sg.vocab)
-        test_sg = get_sg_baseline(test_corp, classifier, corpus_encoder, vocab=train_sg.vocab)
-        print("Populated files for baseline evaluation")
+    train_sg = get_sg_baseline(train_corp, classifier, corpus_encoder)
+    val_sg = get_sg_baseline(val_corp, classifier, corpus_encoder, vocab=train_sg.vocab)
+    test_sg = get_sg_baseline(test_corp, classifier, corpus_encoder, vocab=train_sg.vocab)
+    print("Populated files for baseline evaluation")
 
 
 def get_sg_baseline(eval_corp, classifier, encoder, n_sg=50, vocab=None, max_vocab_size=5000):
@@ -80,11 +82,11 @@ def get_sg_baseline(eval_corp, classifier, encoder, n_sg=50, vocab=None, max_voc
     feat_dict = get_feat_dict(sg.vocab.term2idx, vec_type='binary')
     rel_name = classifier.model_type \
                + '_hid' + str(classifier.hidden_dim) \
-               + '_emb' + str(classifier.emb_dim) + '_mimic' \
+               + '_emb' + str(classifier.emb_dim) + '_sst2' \
                + '_min' + str(min_n) + '_max' + str(max_n) + '_skip' \
                + str(skip) + '_baseline_'
     write_arff_file(rel_name,
-                    feat_dict, eval_corp.label_encoder.classes_,
+                    feat_dict, ['negative, positive'],
                     sg.sg_bag, y_pred,
                     '../out/weka/', rel_name + eval_corp.subset_name + '_pred.arff')
 
@@ -133,10 +135,10 @@ def get_imp_sg(eval_corp, classifier, encoder,
     feat_dict = get_feat_dict(sg.vocab.term2idx, vec_type='discretized')
     rel_name = classifier.model_type \
                + '_hid' + str(classifier.hidden_dim) \
-               + '_emb' + str(classifier.emb_dim) + '_mimic' \
+               + '_emb' + str(classifier.emb_dim) + '_sst2' \
                + '_min' + str(min_n) + '_max' + str(max_n) + '_skip' + str(skip) + '_'
     write_arff_file(rel_name,
-                    feat_dict, eval_corp.label_encoder.classes_,
+                    feat_dict, ['negative', 'positive'],
                     sg.sg_bag, explanations['dot'].preds,
                     '../out/weka/', rel_name + eval_corp.subset_name + '_pred.arff')
 
@@ -147,8 +149,9 @@ def main():
     classifier = load_model()
     train_corpus, val_corpus, test_corpus, corpus_encoder = load_corpora()
 
-    write_baseline_expl_files(classifier,
-                              train_corpus, val_corpus, test_corpus, corpus_encoder)
+    if baseline:
+        write_baseline_expl_files(classifier,
+                                train_corpus, val_corpus, test_corpus, corpus_encoder)
 
     write_explanation_files(classifier, train_corpus, val_corpus, test_corpus, corpus_encoder)
 

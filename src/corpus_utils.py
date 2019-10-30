@@ -6,6 +6,7 @@ from sklearn.model_selection import train_test_split
 import torch
 from os.path import realpath, join
 import json
+import csv
 import numpy as np
 from random import shuffle
 
@@ -28,7 +29,6 @@ class Vocab:
         for key, sym in reserved_sym.items():
             if sym in vocab_set:
                 print("Removing the reserved symbol {} from training corpus".format(sym))
-                # @todo: delete symbol from embedding space also?
                 del vocab_set[sym]
             # Add item with given default value if it does not exist.
             inst.word2idx.setdefault(sym, len(inst.word2idx))
@@ -69,7 +69,9 @@ class Vocab:
         return inst
 
 
-def dummy_processor(line):
+def dummy_processor(line, lower=True):
+    if lower:
+        line = line.lower()
     return line.strip().split()
 
 
@@ -81,35 +83,114 @@ def encode_labels(fit_labels, transform_labels):
     return le.transform(transform_labels), le
 
 
+class BinaryLabelEncoder:
+    def __init__(self, label_dict={'positive': 1, 'negative': 0}):
+        self.label2idx = label_dict
+        self.idx2label = dict()
+        for label in label_dict.keys():
+            self.idx2label[self.label2idx[label]] = label
+
+    def transform(self, labels):
+        transformed_labels = [self.label2idx[label] for label in labels]
+        return transformed_labels
+
+    def inverse_transform(self, labels):
+        transformed_labels = [self.idx2label[label] for label in labels]
+        return transformed_labels
+
+
 class Corpus:
     def __init__(self, dir_corpus, f_labels, dir_labels, fname_subset, subset_name,
                  text_processor=dummy_processor, label_encoder=encode_labels,
                  resample=False):
         self.dir_in = dir_corpus
-        self.fname_subset = fname_subset  # file names for the current split of the corpus
+        self.subset_ids = fname_subset  # file names for the current split of the corpus
         self.subset_name = subset_name
 
         all_labels = FileUtils.read_json(f_labels, dir_labels)
-        self.labels = [all_labels[i] for i in self.fname_subset]
+        self.labels = [all_labels[i] for i in self.subset_ids]
         self.labels, self.label_encoder = label_encoder(list(all_labels.values()),
                                                         self.labels)
 
         if resample:
-            self.fname_subset = DataUtils.downsample(self.fname_subset,
-                                                     self.labels)
-            resampled_labels = [all_labels[i] for i in self.fname_subset]
+            self.subset_ids = DataUtils.downsample(self.subset_ids,
+                                                   self.labels)
+            resampled_labels = [all_labels[i] for i in self.subset_ids]
             self.labels = self.label_encoder.transform(resampled_labels)
 
         self.text_processor = text_processor
 
     def __iter__(self):
 
-        for cur_fname, cur_label in zip(self.fname_subset, self.labels):
+        for cur_fname, cur_label in zip(self.subset_ids, self.labels):
             with open(realpath(join(self.dir_in, cur_fname + '.txt'))) as f:
                 word_seq = list()
                 for line in f:
                     word_seq.extend(self.text_processor(line))
                 yield (word_seq, cur_label)
+
+    def get_class_distribution(self):
+        for cur_label in set(self.labels):
+            print("Percentage of instances for class{}: {}".
+                  format(cur_label, sum(self.labels==cur_label)/len(self.labels)*100))
+
+
+class TorchNLPCorpus:
+    def __init__(self, torchnlp_dataset, subset_name, all_labels,
+                 label_encoder=encode_labels):
+        self.dataset = torchnlp_dataset
+        self.subset_name = subset_name
+        self.subset_ids = [i for i in range(len(self.dataset.examples))]
+
+        labels = [cur_inst.label[0] for cur_inst in self.dataset.examples]
+        self.labels, self.label_encoder = label_encoder(all_labels, labels)
+
+    def __iter__(self):
+
+        for i, inst in enumerate(self.dataset.examples):
+            yield (inst.text, self.labels[i])
+
+    def get_class_distribution(self):
+        for cur_label in set(self.labels):
+            print("Percentage of instances for class{}: {}".
+                  format(cur_label, sum(self.labels==cur_label)/len(self.labels)*100))
+
+
+class SST2Corpus:
+    def __init__(self, fname_corpus, dir_in, subset_name,
+                 text_processor,
+                 le=BinaryLabelEncoder):
+        self.fname_corpus = fname_corpus
+        self.dir_in = dir_in
+        self.subset_name = subset_name
+        self.text_processor = text_processor
+        self.label_encoder = le()
+
+        self.init_subset_ids_labels()
+
+    def init_subset_ids_labels(self):
+        self.subset_ids = list()
+        self.labels = list()
+
+        with open(realpath(join(self.dir_in, self.fname_corpus))) as csvfile:
+            reader = csv.reader(csvfile, delimiter=',')
+            for i, row in enumerate(reader):
+                if i == 0:
+                    continue
+                self.subset_ids.append(i-1)
+                self.labels.append(int(row[0]))
+
+    def __iter__(self):
+
+        with open(realpath(join(self.dir_in, self.fname_corpus))) as csvfile:
+            reader = csv.reader(csvfile, delimiter=',')
+            for i, row in enumerate(reader):
+                if i == 0:
+                    continue
+                else:
+                    tokens = [str(i) for i in self.text_processor(row[1].lower())]
+                    label = int(row[0])
+                    yield(tokens, label)
 
     def get_class_distribution(self):
         for cur_label in set(self.labels):

@@ -44,7 +44,7 @@ class SepsisData:
 
 if __name__ == '__main__':
 
-    dir_sepsis = '/home/madhumita/PycharmProjects/mimiciii-sepsis/sepsis3-data'
+    dir_sepsis = '/home/madhumita/PycharmProjects/mimiciii-rnn_expl_rules/sepsis3-data'
     dir_mimic = '/home/madhumita/dataset/mimiciii'
 
     sepsis_data = SepsisData(dir_sepsis, dir_mimic)
