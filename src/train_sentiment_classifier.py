@@ -1,13 +1,12 @@
 import sys
 sys.path.append('/home/madhumita/PycharmProjects/rnn_expl_rules/')
 
-from src.corpus_utils import SST2Corpus, CorpusEncoder
+from src.corpus_utils import CSVCorpus, CorpusEncoder, spacy_eng_tokenizer
 from src.classifiers.lstm import LSTMClassifier
 from src.utils import EmbeddingUtils, FileUtils
 
 import torch
 
-from spacy.lang.en import English
 from sklearn.metrics import f1_score, accuracy_score
 
 from os.path import exists, realpath, join
@@ -39,19 +38,15 @@ model_name = 'lstm'  # lstm|gru
 test_mode = 'test'  # val | test
 
 
-def init_spacy_eng_tokenizer():
-    nlp = English()
-    tokenizer = nlp.Defaults.create_tokenizer(nlp)
-    return tokenizer
-
-
 def process_model():
 
-    tokenizer = init_spacy_eng_tokenizer()
-
-    train_corp = SST2Corpus(FNAME_TRAIN, PATH_DIR_CORPUS, 'train', tokenizer)
-    val_corp = SST2Corpus(FNAME_VAL, PATH_DIR_CORPUS, 'val', tokenizer)
-    test_corp = SST2Corpus(FNAME_TEST, PATH_DIR_CORPUS, 'test', tokenizer)
+    label_dict = {'positive': 1, 'negative': 0}
+    train_corp = CSVCorpus(FNAME_TRAIN, PATH_DIR_CORPUS, True, 'train',
+                           spacy_eng_tokenizer, label_dict)
+    val_corp = CSVCorpus(FNAME_VAL, PATH_DIR_CORPUS, True, 'val',
+                         spacy_eng_tokenizer, label_dict)
+    test_corp = CSVCorpus(FNAME_TEST, PATH_DIR_CORPUS, True, 'test',
+                          spacy_eng_tokenizer, label_dict)
 
     if load_encoder:
         if not exists(realpath(join(PATH_DIR_ENCODER, FNAME_ENCODER))):
@@ -72,14 +67,14 @@ def process_model():
     # get embedding weights matrix
     if embs_from_disk:
         print("Loading word embeddings matrix ...")
-        weights = FileUtils.read_numpy('pretrained_embs.npy', PATH_DIR_OUT)
+        weights = FileUtils.read_numpy('pretrained_embs_sentiment.npy', PATH_DIR_OUT)
     else:
         weights = EmbeddingUtils.get_embedding_weight(FNAME_EMBS,
                                                       PATH_DIR_EMBS,
                                                       N_DIM_EMBS,
                                                       corpus_encoder.vocab.word2idx)
         print("Saving word embeddings matrix ...")
-        FileUtils.write_numpy(weights, 'pretrained_embs.npy', PATH_DIR_OUT)
+        FileUtils.write_numpy(weights, 'pretrained_embs_sentiment.npy', PATH_DIR_OUT)
 
     weights = torch.from_numpy(weights).type(torch.FloatTensor)
 
@@ -115,7 +110,7 @@ def process_model():
     else:
         # load model
         classifier = LSTMClassifier.load(
-            f_model='sentiment_mimic_lstm_classifier_hid150_emb300.tar')
+            f_model='sentiment_lstm_classifier_hid150_emb300.tar')
 
     if test_mode == 'val':
         eval_corp = val_corp

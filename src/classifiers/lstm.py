@@ -19,7 +19,7 @@ class LSTMClassifier(RNNClassifier):
                  label_size,
                  batch_size,
                  bidir=False,
-                 emb_weights=None,):
+                 emb_weights=None):
         super().__init__(batch_size)
 
         self.model_type = 'lstm'

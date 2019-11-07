@@ -110,7 +110,8 @@ class SepsisMIMIC:
         n_mention_sepsis = 0
 
         for hadm_id in hadm_ids:
-            if 'rnn_expl_rules' in note_subset[note_subset['HADM_ID'] == hadm_id]['TEXT'].item():
+            if 'rnn_expl_rules' in note_subset[note_subset['HADM_ID'] ==
+                                               hadm_id]['TEXT'].item():
                 n_mention_sepsis += 1
                 # print(note_subset[note_subset['HADM_ID'] == hadm_id]['TEXT'].item())
 

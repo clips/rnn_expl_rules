@@ -1,7 +1,7 @@
 import numpy as np
 # import os
 #
-# from src.clamp.clamp_proc import Clamp
+from src.clamp.clamp_proc import Clamp
 
 SEPSIS_GOLD = {
         'pneumonia', 'empyema', 'meningitis', 'endocarditis', 'infection',
@@ -34,6 +34,7 @@ SEPSIS_GOLD = {
 #         phrase_set.remove(term) #inplace update
 #         phrase_set.update(term.split()) #inplace update
 
+
 class InterpretabilityEval:
 
     # def __init__(self, dir_clamp, dir_text, use_neg = True):
@@ -49,20 +50,20 @@ class InterpretabilityEval:
     #     self.gold = SEPSIS_GOLD.union(NEG_CUES)
     #     print("Total length of gold standard set of important words", len(self.gold))
 
-    def __init__(self, corpus, clamp_obj, use_neg = True, keywords = SEPSIS_GOLD):
-        #populating the list of gold important keywords for the instance
-        #the conversion to list can be avoided if we use the generator directly later.
+    def __init__(self, corpus, use_neg=True, keywords=SEPSIS_GOLD):
+        # populating the list of gold important keywords for the instance
+        # the conversion to list can be avoided if we use the generator directly later.
         # Might come in handy for larger datasets.
-        self.gold_list = list(self.get_inst_gold(corpus, clamp_obj, keywords, use_neg))
+        self.gold_list = list(self.get_inst_gold(corpus, keywords, use_neg))
 
-    def accuracy(self, scores, sequences, debug = False):
-        '''
+    def accuracy(self, scores, sequences, debug=False):
+        """
         Computes precision, recall and F1 score at rank k (information retrieval metric) averaged across all the instances.
         :param scores: 2D list n_inst * seq_len with word importance scores
         :param sequences: 2D list n_inst * seq_len with word sequences
-        :param k: Rank k to compute metrics at
+        :param debug: True to display messages for debugging
         :return: Average precision@k, recall@k and F-score@k
-        '''
+        """
         # avg_prec = 0.
         # avg_recall = 0.
         avg_acc = 0.
@@ -70,10 +71,11 @@ class InterpretabilityEval:
 
         for score_row, seq_row, gold in zip(scores, sequences, self.gold_list):
 
-            k = len(gold) #retrieving as many elements as in gold set for an instance
+            # retrieving as many elements as in gold set for an instance
+            k = len(gold)
 
             if k == 0:
-                #empty gold set, skip the instances from calculation
+                # empty gold set, skip the instances from calculation
                 if debug: print("Skipping instance with empty gold set")
                 continue
 
@@ -129,42 +131,42 @@ class InterpretabilityEval:
         :return avg_inst_prec: average precision
         """
         avg_inst_prec = 0.
-        n_inst = 0 #counter only over instances that prec is computed for. Skipping 0-gold instances
-        for i, sg_list in enumerate(skipgrams): #iterating over instances
+        n_inst = 0  # counter only over instances that prec is computed for. Skipping 0-gold instances
+        for i, sg_list in enumerate(skipgrams):  # iterating over instances
             if len(self.gold_list[i]) == 0:
-                continue #skip the instances without a gold term
+                continue  # skip the instances without a gold term
             n_inst += 1
             avg_sg_prec = 0.
-            for sg in sg_list: #iterate over all skipgrams of instance
+            for sg in sg_list:  # iterate over all skipgrams of instance
                 sg = sg.split()
                 overlap = self.gold_list[i].intersection(sg)
                 avg_sg_prec += len(overlap) / len(sg)
             avg_sg_prec /= len(sg_list)
-            avg_inst_prec += avg_sg_prec #macro average prec over all skipgrams
-        avg_inst_prec /= n_inst #macro average skip gram prec over all instances
+            avg_inst_prec += avg_sg_prec  # macro average prec over all skipgrams
+        avg_inst_prec /= n_inst  # macro average skip gram prec over all instances
         return avg_inst_prec
 
-    def get_inst_gold(self, corpus, clamp_obj, keywords, use_neg):
+    def get_inst_gold(self, corpus, keywords, use_neg):
         """
         Get gold important terms for every instance based on the gold entity mentions and negation cues in that instance.
         :param corpus: corpus object
-        :param clamp_obj: clamp object
+        :param dir_clamp: clamp file path
         :param keywords: set of gold keywords used for populating the documents
         :param use_neg: True to use negation triggers in gold set.
         :yields set of gold "important" terms for one instance at a time
         """
-        for fname in corpus.fname_subset:
+        for txt, clamp_txt in corpus.get_text_clamptxt():
             gold = set()
-            #set of gold keywords present in the instance
-            gold.update(self._get_gold_entity_set(clamp_obj, fname, keywords))
+            # set of gold keywords present in the instance
+            gold.update(self._get_gold_entity_set(clamp_txt, keywords))
             if use_neg:
-                #adding set of negation triggers and corresponding negated keywords to gold set
-                gold.update(self._get_gold_neg_set(clamp_obj, fname, corpus.dir_in, keywords))
+                # adding set of negation triggers and corresponding negated keywords to gold set
+                gold.update(self._get_gold_neg_set(clamp_txt, txt, keywords))
             yield gold
 
-    def _get_gold_entity_set(self, clamp_obj, fname, keywords):
+    def _get_gold_entity_set(self, clamp_txt, keywords):
         gold_ents = set()
-        entities = clamp_obj.get_entities(fname + '.txt')
+        entities = Clamp().get_entities_from_text(clamp_txt)
         # Add all entities present in the instance to the gold set
         for cur_ent in entities:
             for i in keywords:
@@ -174,16 +176,16 @@ class InterpretabilityEval:
 
         return gold_ents
 
-    def _get_gold_neg_set(self, clamp_obj, fname, dir_text, keywords):
+    def _get_gold_neg_set(self, clamp_txt, txt, keywords):
         gold_neg = set()
-        rels = clamp_obj.get_relations_neg(fname + '.txt', dir_text)
+        rels = Clamp().get_relations_neg_from_text(clamp_txt, txt)
         for cur_rel in rels:
             # check if this relation is a negation of one of the keywords
             for i in keywords:
                 if i in cur_rel.entity1.mention.lower():
                     # if entity is a keyword used to populate the docs, add entity and negation marker to gold set
-                    gold_neg.update(i.split()) #add the entity. Possibly redundant after entity iteration done earlier?
-                    gold_neg.update(cur_rel.entity2.mention.split()) #add the negation marker
+                    gold_neg.update(i.split())  # add the entity. Possibly redundant after entity iteration done earlier?
+                    gold_neg.update(cur_rel.entity2.mention.split())  # add the negation marker
                     break
 
         return gold_neg

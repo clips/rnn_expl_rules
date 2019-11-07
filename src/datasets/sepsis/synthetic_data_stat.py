@@ -41,13 +41,13 @@ def type_token_ratio(fname, dir_name, no_punc = True, sample_n = None, n_runs = 
             print("Type token ratio:", ttr)
             return ttr
 
+
 def get_ttr(tokens):
     types = set(tokens)
     # print("Num of tokens: ", len(tokens))
     # print("Num of types: ", len(types))
     ttr = len(types)/len(tokens)
     return ttr
-
 
 
 def zipfian_distr(fname, dir_name, dir_out, plot_name, corpus_name):

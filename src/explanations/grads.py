@@ -93,7 +93,7 @@ class Explanation:
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            golds = self.corpus.label_encoder.inverse_transform(self.corpus.labels)
+            golds = self.corpus.label_encoder.inverse_transform(self.corpus.get_labels())
             preds = self.corpus.label_encoder.inverse_transform(self.preds)
 
             if not isinstance(golds, list): golds = golds.tolist()

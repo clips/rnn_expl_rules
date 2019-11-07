@@ -1,4 +1,4 @@
-from src.corpus_utils import CorpusEncoder, Corpus
+from src.corpus_utils import CorpusEncoder, SepsisMimicCorpus
 from src.classifiers.lstm import LSTMClassifier
 from src.utils import FileUtils
 

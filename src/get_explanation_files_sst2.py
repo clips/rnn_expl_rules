@@ -1,7 +1,7 @@
 import sys
 sys.path.append('/home/madhumita/PycharmProjects/rnn_expl_rules/')
 
-from src.corpus_utils import DataUtils, SST2Corpus, CorpusEncoder
+from src.corpus_utils import CSVCorpus, CorpusEncoder, spacy_eng_tokenizer
 from src.classifiers.lstm import LSTMClassifier
 from src.explanations.grads import Explanation
 from src.explanations.imp_sg import SeqImpSkipGram
@@ -10,8 +10,6 @@ from src.weka_utils.vec_to_arff import get_feat_dict, write_arff_file
 
 from os.path import exists, realpath, join
 import resource
-
-from spacy.lang.en import English
 
 soft, hard = 5.4e+10, 5.4e+10  # nearly 50GB
 resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
@@ -31,12 +29,6 @@ test_mode = 'test'  # val | test
 baseline = False
 
 
-def init_spacy_eng_tokenizer():
-    nlp = English()
-    tokenizer = nlp.Defaults.create_tokenizer(nlp)
-    return tokenizer
-
-
 def load_model():
     classifier = LSTMClassifier.load(
         f_model='sentiment_lstm_classifier_hid150_emb300.tar')
@@ -47,11 +39,13 @@ def load_model():
 def load_corpora():
 
     # initialize corpora
-    tokenizer = init_spacy_eng_tokenizer()
-
-    train_corp = SST2Corpus(FNAME_TRAIN, PATH_DIR_CORPUS, 'train', tokenizer)
-    val_corp = SST2Corpus(FNAME_VAL, PATH_DIR_CORPUS, 'val', tokenizer)
-    test_corp = SST2Corpus(FNAME_TEST, PATH_DIR_CORPUS, 'test', tokenizer)
+    label_dict = {'positive': 1, 'negative': 0}
+    train_corp = CSVCorpus(FNAME_TRAIN, PATH_DIR_CORPUS, True, 'train',
+                           spacy_eng_tokenizer, label_dict)
+    val_corp = CSVCorpus(FNAME_VAL, PATH_DIR_CORPUS, True, 'val',
+                         spacy_eng_tokenizer, label_dict)
+    test_corp = CSVCorpus(FNAME_TEST, PATH_DIR_CORPUS, True, 'test',
+                          spacy_eng_tokenizer, label_dict)
 
     if not exists(realpath(join(PATH_DIR_ENCODER, FNAME_ENCODER))):
         raise FileNotFoundError("Encoder not found")
@@ -64,12 +58,15 @@ def load_corpora():
 def write_baseline_expl_files(classifier, train_corp, val_corp, test_corp, corpus_encoder):
 
     train_sg = get_sg_baseline(train_corp, classifier, corpus_encoder)
-    val_sg = get_sg_baseline(val_corp, classifier, corpus_encoder, vocab=train_sg.vocab)
-    test_sg = get_sg_baseline(test_corp, classifier, corpus_encoder, vocab=train_sg.vocab)
+    val_sg = get_sg_baseline(val_corp, classifier, corpus_encoder,
+                             vocab=train_sg.vocab)
+    test_sg = get_sg_baseline(test_corp, classifier, corpus_encoder,
+                              vocab=train_sg.vocab)
     print("Populated files for baseline evaluation")
 
 
-def get_sg_baseline(eval_corp, classifier, encoder, n_sg=50, vocab=None, max_vocab_size=5000):
+def get_sg_baseline(eval_corp, classifier, encoder, n_sg=50,
+                    vocab=None, max_vocab_size=5000):
     seqs = encoder.get_decoded_sequences(eval_corp)
     y_pred, __ = classifier.predict(eval_corp, encoder)
 

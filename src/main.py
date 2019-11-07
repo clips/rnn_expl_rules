@@ -1,20 +1,18 @@
 import sys
 sys.path.append('/home/madhumita/PycharmProjects/rnn_expl_rules/')
 
-from src.corpus_utils import DataUtils, Corpus, CorpusEncoder
+from src.corpus_utils import ClampedCSVCorpus, CorpusEncoder, dummy_processor
 from src.classifiers.lstm import LSTMClassifier
 from src.classifiers.gru import GRUClassifier
 from src.explanations.grads import Explanation
 from src.explanations.eval import InterpretabilityEval
 from src.explanations.imp_sg import SeqImpSkipGram
 from src.explanations.expl_orig_input import SeqSkipGram
-from src.clamp.clamp_proc import Clamp
 from src.utils import FileUtils
 from src.weka_utils.vec_to_arff import get_feat_dict, write_arff_file
 
 import torch
 from sklearn.metrics import f1_score
-import numpy as np
 
 from os.path import exists, realpath, join
 from os import makedirs
@@ -25,48 +23,43 @@ resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
 
 
 def main():
-    # dir_corpus = '/home/madhumita/dataset/sepsis_synthetic/text/'
-    dir_corpus = '/home/madhumita/sepsis_synthetic/text/'
-    dir_clamp = '/home/madhumita/sepsis_synthetic/clamp/'
-    f_labels = 'sepsis_labels.json'
-    # dir_labels = '/home/madhumita/dataset/sepsis_synthetic/labels/'
-    dir_labels = '/home/madhumita/sepsis_synthetic/labels/'
-
-    # get train, val, test splits
-    create_split = False
-    # dir_splits = '/home/madhumita/dataset/sepsis_synthetic/splits/'
-    dir_splits = '/home/madhumita/sepsis_synthetic/splits/'
-    if create_split:
-        train_split, val_split, test_split = DataUtils.split_data(f_labels, dir_labels, dir_splits)
-    else:
-        train_split, val_split, test_split = DataUtils.read_splits(dir_splits)
-
-    # initialize corpora
-    train_corp = Corpus(dir_corpus, f_labels, dir_labels, train_split,'train')
-    val_corp = Corpus(dir_corpus, f_labels, dir_labels, val_split, 'val')
-    test_corp = Corpus(dir_corpus, f_labels, dir_labels, test_split, 'test')
+    PATH_DIR_CORPUS = '../dataset/sepsis_synthetic/'
+    FNAME_TRAIN = 'train_synthetic.csv'
+    FNAME_VAL = 'val_synthetic.csv'
+    FNAME_TEST = 'test_synthetic.csv'
+    PATH_DIR_OUT = '../out/'
 
     load_encoder = True
-    fname_encoder = 'corpus_encoder.json'
-    dir_encoder = '../out/'
-
-    if load_encoder:
-        if not exists(realpath(join(dir_encoder, fname_encoder))):
-            raise FileNotFoundError("Encoder not found")
-        # load encoder
-        corpus_encoder = CorpusEncoder.from_json(fname_encoder, dir_encoder)
-    else:
-        # initialize vocab
-        corpus_encoder = CorpusEncoder.from_corpus(train_corp)
-
-        if not exists(dir_encoder):
-            makedirs(dir_encoder)
-        # serialize encoder
-        corpus_encoder.to_json(fname_encoder, dir_encoder)
+    FNAME_ENCODER = 'corpus_encoder.json'
+    PATH_ENCODER = '../out/'
 
     # train_model = True
     train_model = False
     model_name = 'lstm'  # lstm|gru
+
+    label_dict = {"non_septic": 0, "septic": 1}
+
+    # initialize corpora
+    train_corp = ClampedCSVCorpus(FNAME_TRAIN, PATH_DIR_CORPUS, 'train',
+                                  dummy_processor, label_dict)
+    val_corp = ClampedCSVCorpus(FNAME_VAL, PATH_DIR_CORPUS, 'val',
+                                dummy_processor, label_dict)
+    test_corp = ClampedCSVCorpus(FNAME_TEST, PATH_DIR_CORPUS, 'test',
+                                 dummy_processor, label_dict)
+
+    if load_encoder:
+        if not exists(realpath(join(PATH_ENCODER, FNAME_ENCODER))):
+            raise FileNotFoundError("Encoder not found")
+        # load encoder
+        corpus_encoder = CorpusEncoder.from_json(FNAME_ENCODER, PATH_ENCODER)
+    else:
+        # initialize vocab
+        corpus_encoder = CorpusEncoder.from_corpus(train_corp)
+
+        if not exists(PATH_ENCODER):
+            makedirs(PATH_ENCODER)
+        # serialize encoder
+        corpus_encoder.to_json(FNAME_ENCODER, PATH_ENCODER)
 
     if train_model:
         net_params = {'n_layers': 1,
@@ -91,14 +84,21 @@ def main():
         optimizer = torch.optim.Adam(classifier.parameters(), lr=lr)
 
         classifier.train_model(train_corp, corpus_encoder, n_epochs, optimizer)
-        classifier.save(f_model=model_name+'_classifier_hid'+str(net_params['hidden_dim'])+'_emb'+str(net_params['embedding_dim'])+'.tar')
+        classifier.save(f_model=model_name +
+                                '_classifier_hid' +
+                                str(net_params['hidden_dim']) +
+                                '_emb'+str(net_params['embedding_dim']) +
+                                '.tar',
+                        dir_model=PATH_DIR_OUT)
 
     else:
         # load model
         if model_name == 'lstm':
-            classifier = LSTMClassifier.load(f_model='lstm_classifier_hid100_emb100.tar')
+            classifier = LSTMClassifier.load(f_model='lstm_classifier_hid100_emb100.tar',
+                                             dir_model=PATH_DIR_OUT)
         elif model_name == 'gru':
-            classifier = GRUClassifier.load(f_model='gru_classifier_hid50_emb50.tar')
+            classifier = GRUClassifier.load(f_model='gru_classifier_hid50_emb50.tar',
+                                            dir_model=PATH_DIR_OUT)
         else:
             raise ValueError("Model should be either 'gru' or 'lstm'")
 
@@ -111,35 +111,36 @@ def main():
         raise ValueError("Specify val|test corpus for evaluation")
 
     print("Testing on {} data".format(test_mode))
-
     # get predictions
     y_pred, y_true = classifier.predict(eval_corp, corpus_encoder)
     # compute scoring metrics
     print(f1_score(y_true=y_true, y_pred=y_pred, average='macro'))
 
-    baseline = True
+    labels = sorted(label_dict, key=label_dict.get)
+
+    baseline = False
     if baseline:
-        train_sg = get_sg_baseline(train_corp, classifier, corpus_encoder)
-        val_sg = get_sg_baseline(val_corp, classifier, corpus_encoder, vocab=train_sg.vocab)
-        test_sg = get_sg_baseline(test_corp, classifier, corpus_encoder, vocab=train_sg.vocab)
+        train_sg = get_sg_baseline(train_corp, classifier, corpus_encoder, labels)
+        val_sg = get_sg_baseline(val_corp, classifier, corpus_encoder, labels,
+                                 vocab=train_sg.vocab)
+        test_sg = get_sg_baseline(test_corp, classifier, corpus_encoder, labels,
+                                  vocab=train_sg.vocab)
         print("Wrote files for baseline evaluation")
 
     # populating weka files for interpretability
-    clamp_obj = Clamp(dir_clamp)
-    train_sg = get_sg(clamp_obj, train_corp, classifier, corpus_encoder)
-    val_sg = get_sg(clamp_obj, val_corp, classifier, corpus_encoder,
+    train_sg = get_sg(train_corp, classifier, corpus_encoder, labels)
+    val_sg = get_sg(val_corp, classifier, corpus_encoder, labels,
                     vocab=train_sg.vocab, pos_th=train_sg.pos_th, neg_th=train_sg.neg_th)
-    test_sg = get_sg(clamp_obj, test_corp, classifier, corpus_encoder,
+    test_sg = get_sg(test_corp, classifier, corpus_encoder, labels,
                      vocab=train_sg.vocab, pos_th=train_sg.pos_th, neg_th=train_sg.neg_th)
 
 
-def get_sg(clamp_obj, eval_corp, classifier, encoder,
+def get_sg(eval_corp, classifier, encoder, labels,
            n_sg=50,
            vocab=None, max_vocab_size=5000, pos_th=0., neg_th=0.,
-           get_imp=False, search_sg_params=False):
+           compute_imp=False, search_sg_params=False):
 
     print("Getting top skipgrams for subset {}".format(eval_corp.subset_name))
-    eval_obj = InterpretabilityEval(eval_corp, clamp_obj)
 
     # methods = ['l2', 'sum', 'max', 'dot', 'max_mul']
     methods = ['dot']
@@ -149,15 +150,17 @@ def get_sg(clamp_obj, eval_corp, classifier, encoder,
     for cur_method in methods:
         print("Pooling method: ", cur_method)
 
-        if get_imp:
+        if compute_imp:
             print("Computing word importance scores")
             # computing word importance scores
             explanation = Explanation.get_grad_importance(cur_method, classifier, eval_corp, encoder)
-            explanations[cur_method] = explanation
-            eval_obj.avg_acc_from_corpus(explanation.imp_scores, eval_corp, encoder)
         else:
             print("Loading word importance scores")
-            explanations[cur_method] = Explanation.from_imp(cur_method, classifier, eval_corp, encoder)
+            explanation = Explanation.from_imp(cur_method, classifier, eval_corp, encoder)
+        explanations[cur_method] = explanation
+
+        eval_obj = InterpretabilityEval(eval_corp)
+        eval_obj.avg_acc_from_corpus(explanation.imp_scores, eval_corp, encoder)
 
     # getting skipgrams
     seqs = encoder.get_decoded_sequences(eval_corp)
@@ -166,8 +169,8 @@ def get_sg(clamp_obj, eval_corp, classifier, encoder,
         # search over best min_n, max_n and skip parameters
         min_n, max_n, skip = sg_param_search(seqs, explanations['dot'].imp_scores, eval_obj)
     else:
-        # min_n, max_n, skip = 1, 4, 2
-        min_n, max_n, skip = 1, 1, 0
+        min_n, max_n, skip = 1, 4, 2
+        # min_n, max_n, skip = 1, 1, 0
 
     sg = SeqImpSkipGram.from_seqs(seqs, explanations['dot'].imp_scores,
                                   min_n=min_n, max_n=max_n, skip=skip,
@@ -181,14 +184,15 @@ def get_sg(clamp_obj, eval_corp, classifier, encoder,
                + '_emb' + str(classifier.emb_dim) + '_synthetic' \
                + '_min' + str(min_n) + '_max' + str(max_n) + '_skip' + str(skip) + '_'
     write_arff_file(rel_name,
-                    feat_dict, eval_corp.label_encoder.classes_,
+                    feat_dict, labels,
                     sg.sg_bag, explanations['dot'].preds,
                     '../out/weka/', rel_name + eval_corp.subset_name + '_pred.arff')
 
     return sg
 
 
-def get_sg_baseline(eval_corp, classifier, encoder, n_sg=50, vocab=None, max_vocab_size=5000):
+def get_sg_baseline(eval_corp, classifier, encoder, labels,
+                    n_sg=50, vocab=None, max_vocab_size=5000):
     seqs = encoder.get_decoded_sequences(eval_corp)
     y_pred, __ = classifier.predict(eval_corp, encoder)
 
@@ -204,7 +208,7 @@ def get_sg_baseline(eval_corp, classifier, encoder, n_sg=50, vocab=None, max_voc
                + '_emb' + str(classifier.emb_dim) + '_synthetic' \
                + '_min' + str(min_n) + '_max' + str(max_n) + '_skip' + str(skip) + '_baseline_'
     write_arff_file(rel_name,
-                    feat_dict, eval_corp.label_encoder.classes_,
+                    feat_dict, labels,
                     sg.sg_bag, y_pred,
                     '../out/weka/', rel_name + eval_corp.subset_name + '_pred.arff')
 
@@ -219,19 +223,25 @@ def sg_param_search(seqs, scores, eval_obj):
     for min_n in range(1, 5):
         for max_n in range(min_n, min_n + 4):
             for skip in range(11):
-                sg = SeqImpSkipGram.from_seqs(seqs, scores, min_n=1, max_n=max_n, skip=skip, topk=50)
+                sg = SeqImpSkipGram.from_seqs(seqs, scores,
+                                              min_n=1, max_n=max_n, skip=skip,
+                                              topk=50)
                 cur_prec = eval_obj.avg_prec_sg(sg.top_sg_seqs)
                 prec[repr((min_n, max_n, skip))] = cur_prec  # converting key to string for JSON serialization
 
                 if cur_prec > best_prec:
                     best_prec, best_min_n, best_max_n, best_skip = cur_prec, min_n, max_n, skip
 
-                print("Average precision at min_n {}, max_n {}, skip {} is: {}".format(min_n, max_n, skip, cur_prec))
+                print("Average precision at min_n {}, max_n {}, skip {} is: {}".
+                      format(min_n, max_n, skip, cur_prec))
                 if max_n == 1:
-                    break  # all skip values will give the same unigram. Hence iterating over it only once.
+                    # all skip values will give the same unigram.
+                    # Hence iterating over it only once.
+                    break
 
     print(
-        "Maximum precision {} for min_n {}, max_n {} and skip {}".format(best_prec, best_min_n, best_max_n, best_skip))
+        "Maximum precision {} for min_n {}, max_n {} and skip {}".
+            format(best_prec, best_min_n, best_max_n, best_skip))
 
     FileUtils.write_json(prec, 'sg_param_search.json', '../out/')
 

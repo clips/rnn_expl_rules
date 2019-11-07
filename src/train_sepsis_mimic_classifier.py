@@ -1,7 +1,7 @@
 import sys
 sys.path.append('/home/madhumita/PycharmProjects/rnn_expl_rules/')
 
-from src.corpus_utils import DataUtils, Corpus, CorpusEncoder
+from src.corpus_utils import DataUtils, SepsisMimicCorpus, CorpusEncoder
 from src.classifiers.lstm import LSTMClassifier
 from src.classifiers.gru import GRUClassifier
 
@@ -44,9 +44,9 @@ def process_model():
         train_split, val_split, test_split = DataUtils.read_splits(PATH_DIR_SPLITS)
 
     # initialize corpora
-    train_corp = Corpus(PATH_DIR_CORPUS, FNAME_LABELS, PATH_DIR_LABELS, train_split, 'train')
-    val_corp = Corpus(PATH_DIR_CORPUS, FNAME_LABELS, PATH_DIR_LABELS, val_split, 'val')
-    test_corp = Corpus(PATH_DIR_CORPUS, FNAME_LABELS, PATH_DIR_LABELS, test_split, 'test')
+    train_corp = SepsisMimicCorpus(PATH_DIR_CORPUS, FNAME_LABELS, PATH_DIR_LABELS, train_split, 'train')
+    val_corp = SepsisMimicCorpus(PATH_DIR_CORPUS, FNAME_LABELS, PATH_DIR_LABELS, val_split, 'val')
+    test_corp = SepsisMimicCorpus(PATH_DIR_CORPUS, FNAME_LABELS, PATH_DIR_LABELS, test_split, 'test')
 
     if load_encoder:
         if not exists(realpath(join(PATH_DIR_ENCODER, FNAME_ENCODER))):

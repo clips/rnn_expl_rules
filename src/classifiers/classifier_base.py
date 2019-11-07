@@ -18,7 +18,7 @@ class RNNClassifier(nn.Module):
         super().__init__()
 
         if torch.cuda.is_available():
-            self.device = torch.device('cuda:1')
+            self.device = torch.device('cuda')
         else:
             self.device = torch.device('cpu')
 
@@ -67,10 +67,9 @@ class RNNClassifier(nn.Module):
                                                  y=corpus.labels)
             label_weights = torch.from_numpy(label_weights).type(torch.FloatTensor)
             label_weights = label_weights.to(self.device)
+            print("Label weights: ", label_weights)
         else:
             label_weights = None
-
-        print("Label weights: ", label_weights)
 
         optimizer = optimizer
 
