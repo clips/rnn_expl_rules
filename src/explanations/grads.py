@@ -1,9 +1,10 @@
-from src.torch_utils import TorchUtils
 from src.utils import FileUtils
 
 import warnings
 import torch
 import numpy as np
+from os.path import splitext
+
 
 class Explanation:
     """
@@ -76,20 +77,23 @@ class Explanation:
                 global_imp_lst.append(word_imp[row, :cols].tolist())
             pred_lst.extend(preds.tolist())
 
-        inst = cls('grad_' + grad_pooling, model, corpus, corpus_encoder, global_imp_lst, pred_lst)
+        inst = cls('grad_' + grad_pooling, model, corpus, corpus_encoder,
+                   global_imp_lst,
+                   pred_lst)
 
         inst.save(fname='imp_scores_' +
                         model.model_type +
                         '_hid' + str(model.hidden_dim) +
                         '_emb' + str(model.emb_dim) +
-                        '_' + corpus.subset_name +
+                        '_' + splitext(corpus.fname)[0] +
                         '_' + grad_pooling + '.json'
                   )
         return inst
 
     def save(self, fname, dir_out='../out/'):
 
-        seqs = self.corpus_encoder.get_decoded_sequences(self.corpus, strip_angular=True)
+        seqs = self.corpus_encoder.get_decoded_sequences(self.corpus,
+                                                         strip_angular=True)
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -113,7 +117,7 @@ class Explanation:
 
         fname = 'imp_scores_' + model.model_type + \
                 '_hid' + str(model.hidden_dim) + '_emb' + str(model.emb_dim) + \
-                '_' + corpus.subset_name + '_' + pooling + '.json'
+                '_' + splitext(corpus.fname)[0] + '_' + pooling + '.json'
 
         json_file = FileUtils.read_json(fname, dir_in)
 

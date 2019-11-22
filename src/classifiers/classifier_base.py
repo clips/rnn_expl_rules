@@ -81,13 +81,14 @@ class RNNClassifier(nn.Module):
             running_loss = 0.0
 
             # shuffle the corpus
-            combined = list(zip(corpus.subset_ids, corpus.labels))
-            shuffle(combined)
-            corpus.subset_ids, corpus.labels = zip(*combined)
+            shuffle(corpus.row_ids)
 
             # get train batch
             for idx, (cur_insts, cur_labels) in enumerate(
                     corpus_encoder.get_batches_from_corpus(corpus, self.batch_size)):
+
+                torch.cuda.empty_cache()
+                
                 cur_insts, cur_labels, cur_lengths = corpus_encoder.batch_to_tensors(
                                                         cur_insts, cur_labels, self.device)
 
@@ -107,7 +108,8 @@ class RNNClassifier(nn.Module):
 
                 optimizer.step()  # perform the gradient update step
 
-                # detach hidden nodes from the graph. IMP to prevent the graph from growing.
+                # detach hidden nodes from the graph.
+                # IMP to prevent the graph from growing.
                 self.detach_hidden_()
 
                 # print statistics
@@ -118,18 +120,13 @@ class RNNClassifier(nn.Module):
                           (i + 1, idx + 1, running_loss / 100))
                     running_loss = 0.0
 
-            y_pred, y_true = self.predict(corpus, corpus_encoder)
-            print("Train accuracy: ",
-                  accuracy_score(y_true=y_true, y_pred=y_pred))
-
             if val_corpus:
                 y_pred_val, y_true_val = self.predict(val_corpus, corpus_encoder)
-                y_score_val = accuracy_score(y_true=y_true_val, y_pred=y_pred_val)
-                print("Validation set accuracy: ", y_score_val)
-
-                # y_score_val = f1_score(y_true=y_true_val, y_pred=y_pred_val, average='macro')
-                # print("Validation F1 score for all classes: ",
-                #       f1_score(y_true=y_true_val, y_pred=y_pred_val, average=None))
+                y_score_val = f1_score(y_true=y_true_val, y_pred=y_pred_val,
+                                       average='macro')
+                print("Validation macro F1: ",
+                      f1_score(y_true=y_true_val, y_pred=y_pred_val,
+                               average='macro'))
 
                 early_stopping(y_score_val, self)
 

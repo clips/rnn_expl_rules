@@ -1,5 +1,6 @@
 from sklearn.preprocessing import LabelEncoder
 from spacy.lang.en import English
+import spacy
 import pandas as pd
 
 import torch
@@ -68,7 +69,7 @@ class Vocab:
 
 
 def dummy_processor():
-    return space_tokenizer
+    return space_tokenizer  # to make it compatible with spacy style call
 
 
 def space_tokenizer(line):
@@ -158,42 +159,71 @@ class TorchNLPCorpus:
 
 class CSVCorpus:
     def __init__(self, fname_corpus, dir_in, subset_name,
-                 text_processor, label_dict, le=DictLabelEncoder):
-        self.fname_corpus = fname_corpus
+                 text_processor, label_dict, lower=True, le=DictLabelEncoder):
+        self.fname = fname_corpus
         self.dir_in = dir_in
         self.subset_name = subset_name
+
+        # the following ids are required to shuffle training set.
+        n_rows = 0
+        for chunk in pd.read_csv(open(realpath(join(self.dir_in, self.fname))),
+                                 chunksize=64, encoding='utf-8'):
+            n_rows += len(chunk)
+        self.row_ids = [i+1 for i in range(n_rows)]  # +1 accounts for header.
+
         self.text_processor = text_processor()
+        if isinstance(self.text_processor, spacy.tokenizer.Tokenizer):
+            self.uses_spacy = True
+        else:
+            self.uses_spacy = False
+
+        self.lower = lower
         self.label_encoder = le(label_dict)
 
     def __iter__(self):
+        for cur_row_id in self.row_ids:
+            df = pd.read_csv(realpath(join(self.dir_in, self.fname)),
+                             usecols=['text', 'label'],
+                             skiprows=range(1, cur_row_id), nrows=1)
 
-        for chunk in pd.read_csv(realpath(join(self.dir_in, self.fname_corpus)),
-                                 usecols=['label', 'text'],
-                                 chunksize=1):
-            yield (self.text_processor(chunk['text'].iloc[0]),
-                   chunk['label'].iloc[0])
+            if self.lower:
+                text = df['text'].iloc[0].lower()
+            else:
+                text = df['text'].iloc[0]
+
+            text = self.text_processor(text)
+
+            # if spacy tokenizer, convert spacy token types to string
+            if self.uses_spacy:
+                text = [cur_token.text for cur_token in text]
+
+            yield(text, df['label'].iloc[0])
 
     def get_labels(self):
-        df = pd.read_csv(realpath(join(self.dir_in, self.fname_corpus)),
-                         usecols=['label'])
+        labels = list()
+        for cur_row_id in self.row_ids:
+            df = pd.read_csv(realpath(join(self.dir_in, self.fname)),
+                             usecols=['label'],
+                             skiprows=range(1, cur_row_id), nrows=1)
 
-        return df['label'].tolist()
+            labels.append(df['label'].iloc[0])
+        return labels
 
 
 class ClampedCSVCorpus(CSVCorpus):
 
     def __init__(self, fname_corpus, dir_in, subset_name,
-                 text_processor, label_dict, le=DictLabelEncoder):
+                 text_processor, label_dict, lower=True, le=DictLabelEncoder):
 
         super(ClampedCSVCorpus, self).__init__(fname_corpus, dir_in,
                                                subset_name,
-                                               text_processor, label_dict, le)
+                                               text_processor, label_dict, lower, le)
 
     def __iter__(self):
         yield from super(ClampedCSVCorpus, self).__iter__()
 
     def get_text_clamptxt(self):
-        for chunk in pd.read_csv(realpath(join(self.dir_in, self.fname_corpus)),
+        for chunk in pd.read_csv(realpath(join(self.dir_in, self.fname)),
                                  usecols=['clamp', 'text'],
                                  chunksize=1):
             yield (chunk['text'].iloc[0], chunk['clamp'].iloc[0])
@@ -384,5 +414,5 @@ class DataUtils:
     def get_class_distribution(labels):
         for cur_label in set(labels):
             print("Percentage of instances for class{}: {}".
-                  format(cur_label, sum(labels==cur_label)/len(labels)*100))
+                  format(cur_label, labels.count(cur_label)/len(labels)*100))
 

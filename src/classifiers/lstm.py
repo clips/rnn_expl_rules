@@ -81,11 +81,11 @@ class LSTMClassifier(RNNClassifier):
         # hidden gets updated and cell states at the end of the sequence
         lstm_out, hidden = self.lstm(embs, hidden)
         # pad the sequences again to convert to original padded data shape
-        lstm_out, lengths = nn.utils.rnn.pad_packed_sequence(lstm_out, batch_first=False)
+        # lstm_out, lengths = nn.utils.rnn.pad_packed_sequence(lstm_out, batch_first=False)
         # embs, __ = nn.utils.rnn.pad_packed_sequence(embs, batch_first=False)
 
         # unsort batch
-        lstm_out = lstm_out[:, unsort]
+        # lstm_out = lstm_out[:, unsort]
         hidden = (hidden[0][:, unsort, :], hidden[1][:, unsort, :])
         # use the output of the last LSTM layer at the end of the last valid timestep to predict output
         # If sequence len is constant, using hidden[0] is the same as lstm_out[-1].

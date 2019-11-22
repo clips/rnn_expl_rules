@@ -146,9 +146,9 @@ class SeqImpSkipGram:
             for j, elt in enumerate(row):
                 if elt < self.neg_th:
                     sg_bag[i, j] = -2
-                elif self.neg_th <= elt < 0:
+                elif self.neg_th <= elt < 0.:
                     sg_bag[i, j] = -1
-                elif self.pos_th > elt > 0:
+                elif self.pos_th > elt > 0.:
                     sg_bag[i, j] = 1
                 elif elt >= self.pos_th:
                     sg_bag[i, j] = 2
