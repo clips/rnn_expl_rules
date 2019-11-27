@@ -1,3 +1,6 @@
+import sys
+sys.path.append('/home/madhumita/PycharmProjects/rnn_expl_rules/')
+
 from src.utils import FileUtils
 
 from sklearn.datasets import fetch_20newsgroups
@@ -79,7 +82,7 @@ class Newsgroups:
 
         self.x_test, self.y_test = ds_test.data, ds_test.target
 
-        self.label_dict = {i:label for i, label in enumerate(ds_train.target_names)}
+        self.label_dict = {label:int(i) for i, label in enumerate(ds_train.target_names)}
 
     def write_dataset(self, dir_out):
         write_csv(self.x_train, self.y_train, 'train_newsgroups.csv', dir_out)
