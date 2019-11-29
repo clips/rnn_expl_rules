@@ -41,7 +41,8 @@ class TorchUtils:
             raise FileNotFoundError("Model not found")
 
         # load model state
-        state = torch.load(realpath(join(dir_state, fname_state)))
+        state = torch.load(realpath(join(dir_state, fname_state)),
+                           map_location=torch.device('cpu'))
 
         return state
 
