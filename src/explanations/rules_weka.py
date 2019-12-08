@@ -10,13 +10,16 @@ import math
 from itertools import combinations
 from os.path import join, realpath
 
+
 def start_jvm():
     jvm.start()
+
 
 def stop_jvm():
     jvm.stop()
 
-def load_data(fname, dir_in = "../data/", incremental = False):
+
+def load_data(fname, dir_in="../data/", incremental=False):
     """
     Loads data in weka format
     :param fname: filename for data
@@ -29,9 +32,11 @@ def load_data(fname, dir_in = "../data/", incremental = False):
         data = loader.load_file(realpath(join(dir_in, fname)), incremental=incremental)
     else:
         data = loader.load_file(realpath(join(dir_in, fname)))
-    data.class_is_last() #Required to specify which attribute is class attribute. For us, it is the last attribute.
+    # Required to specify which attribute is class attribute. For us, it is the last attribute.
+    data.class_is_last()
 
     return data, loader
+
 
 def merge_classes(data, idx_to_merge):
     """
@@ -71,11 +76,11 @@ def get_classifier(classifier, min_no):
     else:
         raise ValueError("Please enter the correct classifier name (jrip | dec_tree | part)")
 
-
     cls.options = options
     return cls
 
-def build_classifier(data, cls, incremental = False, loader = None):
+
+def build_classifier(data, cls, incremental=False, loader=None):
     """
     Build classifier from the corresponding data
     :param data: weka data object
@@ -96,6 +101,7 @@ def build_classifier(data, cls, incremental = False, loader = None):
 
     return cls
 
+
 def evaluate_classifier(cls, train_data, test_data):
     """
     Evaluation
@@ -108,7 +114,9 @@ def evaluate_classifier(cls, train_data, test_data):
 
     return evl
 
-def optimize_rule_params(classifier, train_data, val_data, test_data, incremental, train_dl, metric):
+
+def optimize_rule_params(classifier, train_data, val_data, test_data,
+                         incremental, train_dl, metric):
     """
     Iterate over different parameter values and train a rule induction model. The best parameters are retained.
     :param classifier: string name of the classification algorithm to use
@@ -123,11 +131,14 @@ def optimize_rule_params(classifier, train_data, val_data, test_data, incrementa
     stats = train_data.attribute_stats(train_data.class_index)
     min_inst = min(stats.nominal_counts)
 
-    # works for binary setup
-    if stats.nominal_counts[0] == min_inst:
-        class_index = 0
-    elif stats.nominal_counts[1] == min_inst:
-        class_index = 1
+    if train_data.get_instance(0).num_classes == 2:
+        # works for binary setup
+        if stats.nominal_counts[0] == min_inst:
+            class_index = 0
+        elif stats.nominal_counts[1] == min_inst:
+            class_index = 1
+    else:
+        class_index = None
 
     print("Number of instances in the minority class with index {}: {}".format(class_index, min_inst))
 
@@ -176,10 +187,6 @@ def optimize_rule_params(classifier, train_data, val_data, test_data, incrementa
     print("Best model: ", best_model)
 
     print("\n Validation set results: ", best_eval.summary())
-    # print("Precision, recall, F-score for the minority class: ",
-    #       best_eval.precision(class_index),
-    #       best_eval.recall(class_index),
-    #       best_score)
     print("Optimized metric {} on validation set {}: ".format(metric, _get_score(metric, best_eval, class_index)))
     print("Validation set confusion matrix: \n", best_eval.confusion_matrix)
 
@@ -189,22 +196,25 @@ def optimize_rule_params(classifier, train_data, val_data, test_data, incrementa
 
     return best_model
 
+
 def save_model(model, fname, dir_name):
-    outfile = realpath(join(dir_name, fname)) #"j48.model"
+    outfile = realpath(join(dir_name, fname))  # "fname.model"
     serialization.write(outfile, model)
+
 
 def load_model(fname, dir_name):
     outfile = realpath(join(dir_name, fname))
     model = Classifier(jobject=serialization.read(outfile))
     return model
 
+
 def get_rule_covering_inst(classifier, data, inst_idx):
-    '''
+    """
     Finds the rule in a learned JRIP model that covers an instance
     :param classifier: trained JRIP model
     :param data: weka dataset
     :param inst_idx: instance ID to find corresponding rule of
-    '''
+    """
     merge_filter = Filter(classname="weka.filters.supervised.attribute.ClassOrder",
                           options=["-C", "0"])
     merge_filter.inputformat(data)
@@ -253,7 +263,7 @@ def get_n_conditions(model, rule_type):
     return n_conds
 
 
-def _get_score(metric, evl, class_index):
+def _get_score(metric, evl, class_index=None):
     if metric == 'class-f-score':
         score = evl.f_measure(class_index)
         print("F-score for the minority class: {} \n".format(score))
@@ -271,8 +281,17 @@ def _get_score(metric, evl, class_index):
 
     return score
 
-def induce_explanations(classifier, opt_metric, train_data, val_data, test_data,
-                        data_dir, out_fname, dir_out):
+
+def get_gold_eval(model, train_gold, test_gold, data_dir):
+    train_data, __ = load_data(train_gold, data_dir)
+    test_data, __ = load_data(test_gold, data_dir)
+    return evaluate_classifier(model, train_data, test_data)
+
+
+def induce_explanations(classifier, opt_metric,
+                        train_data, val_data, test_data, data_dir,
+                        out_fname, dir_out,
+                        train_gold, test_gold):
     """
     Induce the rules using RIPPERk (JRIP) or trees using C4.5
     :param classifier: string name of classification method to use
@@ -306,14 +325,13 @@ def induce_explanations(classifier, opt_metric, train_data, val_data, test_data,
         else:
             best_model = optimize_rule_params(classifier, train_data, val_data, test_data, incremental, train_dl, opt_metric) #normal learning for binary cases
 
-        save_model(best_model, out_fname, dir_out)
+        # save_model(best_model, out_fname, dir_out)
 
         get_rule_complexity(best_model, classifier)
 
-        idx_to_explain = 6837
-        print("Finding the rule that covers instance {} of validation data".format(idx_to_explain))
-        if classifier == 'jrip':
-            get_rule_covering_inst(best_model, val_data, idx_to_explain)
+        gold_evl = get_gold_eval(best_model, train_gold, test_gold, data_dir)
+        gold_score = _get_score('macro-f-score', gold_evl)
+        print("Macro F-score on original task: ", gold_score)
 
     except Exception as e:
         print(e)
@@ -321,30 +339,43 @@ def induce_explanations(classifier, opt_metric, train_data, val_data, test_data,
         stop_jvm()
 
 
-def get_stats():
-    start_jvm()
-
-    try:
-        model = load_model(out_fname, dir_out)
-        get_rule_complexity(model, classifier)
-
-    except Exception as e:
-        print(e)
-    finally:
-        stop_jvm()
+# def get_stats(classifier, out_fname, dir_out):
+#     start_jvm()
+#
+#     try:
+#         model = load_model(out_fname, dir_out)
+#         get_rule_complexity(model, classifier)
+#
+#     except Exception as e:
+#         print(e)
+#     finally:
+#         stop_jvm()
 
 
 if __name__ == '__main__':
     classifier = 'part'
     optimize = 'macro-f-score'
-    train_data = 'lstm_hid150_emb300_sst2_min1_max4_skip2_train_pred.arff'
-    val_data = 'lstm_hid150_emb300_sst2_min1_max4_skip2_val_pred.arff'
-    test_data = 'lstm_hid150_emb300_sst2_min1_max4_skip2_test_pred.arff'
+    train_data = 'lstm_hid150_emb300_binary_sent_min1_max4_skip2_train_pred.arff'
+    val_data = 'lstm_hid150_emb300_binary_sent_min1_max4_skip2_val_pred.arff'
+    test_data = 'lstm_hid150_emb300_binary_sent_min1_max4_skip2_test_pred.arff'
     data_dir = '../../out/weka/'
 
     out_fname = classifier +'_'+ train_data.strip('.arff') + '.model'
     dir_out = '../../out/weka/'
 
-    induce_explanations(classifier, optimize, train_data, val_data, test_data, data_dir, out_fname, dir_out )
+    train_gold = 'lstm_hid150_emb300_binary_sent_min1_max4_skip2_train_gold.arff'
+    test_gold = 'lstm_hid150_emb300_binary_sent_min1_max4_skip2_test_gold.arff'
 
+    induce_explanations(classifier, optimize, train_data, val_data, test_data,
+                        data_dir, out_fname, dir_out,
+                        train_gold, test_gold)
 
+    # start_jvm()
+    # best_model = load_model(out_fname, dir_out)
+    # fidelity_evl = get_gold_eval(best_model, train_data, test_data, data_dir)
+    # fidelity_score = _get_score('macro-f-score', fidelity_evl)
+    # print("Fidelity score on original task: ", fidelity_score)
+    # gold_evl = get_gold_eval(best_model, train_gold, test_gold, data_dir)
+    # gold_score = _get_score('macro-f-score', gold_evl)
+    # print("Macro F-score on original task: ", gold_score)
+    # stop_jvm()
