@@ -128,8 +128,7 @@ def main(dataset, get_expl, get_baseline_expl):
 
 if __name__ == '__main__':
     # newsgroups | sst2 | sepsis-mimic | sepsis-mimic-discharge
-    ds = 'newsgroups'
-    # ds = 'sepsis-mimic'
-    get_expl = False
+    ds = 'sepsis-mimic'
+    get_expl = True
     get_baseline_expl = False
     main(ds, get_expl, get_baseline_expl)
