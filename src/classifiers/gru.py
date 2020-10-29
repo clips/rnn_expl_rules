@@ -125,22 +125,3 @@ class GRUClassifier(RNNClassifier):
     @hidden_in.setter
     def hidden_in(self, val):
         self._hidden_in = val
-
-
-if __name__ == '__main__':
-    gru = GRUClassifier(2, 100, 50, 50, 0.5, 2, 2)
-
-    # variable length sequences
-    X0 = torch.LongTensor([1, 5, 8, 19, 43])
-    X1 = torch.LongTensor([23,44,5,13,1,34,43])
-    X = [X1, X0] # sequence needs to be sorted in descending order of length
-
-    X_padded = nn.utils.rnn.pad_sequence(X, batch_first=True)
-    # print(X_padded)
-
-    fwd_out = gru.forward(X_padded, [7, 5], gru.hidden_in)
-
-    labels = torch.LongTensor([[1,0],[0,1]])
-
-    loss = gru.loss(fwd_out, labels)
-    print(loss)

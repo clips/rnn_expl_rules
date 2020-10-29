@@ -5,6 +5,7 @@ from src.utils import FileUtils
 
 from sklearn.model_selection import train_test_split
 
+import argparse
 import csv
 from os.path import realpath, join
 from os import path, makedirs
@@ -76,24 +77,44 @@ def main(f_labels, dir_labels, dir_corpus, fname_suffix, dir_csv, dir_clamp=None
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument("--dir_sepsis_synthetic", dest='dir_sepsis_synthetic',
+                        help="Directory containing relevant synthetic dataset files.",
+                        required=True)
+
+    parser.add_argument("--dir_sepsis_mimic", dest='dir_sepsis_mimic',
+                        help="Directory containing relevant sepsis-mimic dataset files.",
+                        required=True)
+
+    parser.add_argument("--dir_sepsis_mimic_discharge", dest='dir_sepsis_mimic_discharge',
+                        help="Directory containing relevant sepsis-mimic-discharge dataset files.",
+                        required=True)
+
+    args = parser.parse_args()
+
+    dir_synthetic = args.dir_sepsis_synthetic
+    dir_mimic = args.dir_sepsis_mimic
+    dir_mimic_discharge = args.dir_sepsis_mimic_discharge
+
     f_labels = 'sepsis_labels.json'
-    dir_labels = '/home/madhumita/sepsis_synthetic/labels/'
-    dir_corpus = '/home/madhumita/sepsis_synthetic/text/'
-    dir_clamp = '/home/madhumita/sepsis_synthetic/clamp/'
+    dir_labels = join(dir_synthetic, 'labels')
+    dir_corpus = join(dir_synthetic, 'text')
+    dir_clamp = join(dir_synthetic, 'clamp')
     fname_suffix = 'synthetic'
     dir_csv = '../../../dataset/sepsis_synthetic/'
     main(f_labels, dir_labels, dir_corpus, fname_suffix, dir_csv, dir_clamp)
 
     f_labels = 'sepsis_labels.json'
-    dir_labels = '/home/madhumita/sepsis_mimiciii/labels/'
-    dir_corpus = '/home/madhumita/sepsis_mimiciii/text/'
+    dir_labels = join(dir_mimic, 'labels')
+    dir_corpus = join(dir_mimic, 'text')
     fname_suffix = 'sepsis_mimic'
     dir_csv = '../../../dataset/sepsis_mimic/'
     main(f_labels, dir_labels, dir_corpus, fname_suffix, dir_csv)
 
     f_labels = 'sepsis_labels.json'
-    dir_labels = '/home/madhumita/sepsis_mimiciii_discharge/labels/'
-    dir_corpus = '/home/madhumita/sepsis_mimiciii_discharge/text/'
+    dir_labels = join(dir_mimic_discharge, 'labels')
+    dir_corpus = join(dir_mimic_discharge, 'text')
     fname_suffix = 'sepsis_mimic_discharge'
     dir_csv = '../../../dataset/sepsis_mimic_discharge/'
     main(f_labels, dir_labels, dir_corpus, fname_suffix, dir_csv)

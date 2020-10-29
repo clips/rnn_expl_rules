@@ -1,12 +1,9 @@
-import sys
-
-sys.path.append('/home/madhumita/PycharmProjects/rnn_expl_rules/')
-
 from src.clamp.clamp_proc import Clamp
 from src.utils import FileUtils
 
 from os.path import join, realpath, exists
 from os import makedirs
+import argparse
 import re
 import gzip
 import random
@@ -244,17 +241,39 @@ def add_labels(template, dir_clamp, dir_labels):
 
 
 if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument("--dir_mimic", dest='dir_mimic',
+                        help="Path containing the tokenized MIMIC-III notes.",
+                        required=True)
+
+    parser.add_argument("--dir_out", dest='dir_out',
+                        help="Path to write the text files of the synthetic data.",
+                        required=True)
+
+    parser.add_argument("--dir_clamp", dest='dir_clamp',
+                        help="Path containing clamp output files of the synthetic data text.",
+                        required=True)
+
+    parser.add_argument("--dir_labels", dest='dir_clamp',
+                        help="Path containing the labels for the synthetic texts.",
+                        required=True)
+
+    args = parser.parse_args()
+
+    dir_mimic = args.dir_mimic
+    dir_out = args.dir_out
+    dir_clamp = args.dir_clamp
+    dir_labels = args.dir_labels
+
     f_mimic = 'mimic-notes-tokenized.txt.gz'
-    dir_mimic = '/home/madhumita/dataset/ext_corpora/'
-    dir_out = '/home/madhumita/dataset/sepsis_synthetic/text/'
-    dir_clamp = '/home/madhumita/dataset/sepsis_synthetic/clamp'
-    dir_labels = '/home/madhumita/dataset/sepsis_synthetic/labels/'
 
     synthetic_dataset = create_synthetic_text(f_mimic, dir_mimic, dir_out)
 
 
     # IMP!!!
-    # run clamp on all the documents before running the next command
+    # First run clamp on all the documents before running the next command
     add_labels(synthetic_dataset, dir_clamp, dir_labels)
 
     # @todo: make a shell pipeline to create text, run clamp, obtain labels, ...

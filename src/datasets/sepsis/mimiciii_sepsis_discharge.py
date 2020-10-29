@@ -1,15 +1,13 @@
-import sys
-sys.path.append('/home/madhumita/PycharmProjects/sepsis/')
-
 from src.utils import FileUtils
 
+import argparse
 import pandas as pd
 import numpy as np
 
 from os.path import realpath, join
 import statistics
 
-PATH_MIMICIII = '/home/corpora/accumulate/mimiciii/'
+PATH_MIMICIII = ''
 FNAME_DIAGNOSES = 'DIAGNOSES_ICD.csv.gz'
 FNAME_NOTES = 'NOTEEVENTS.csv.gz'
 
@@ -18,7 +16,7 @@ ICD9_SEPSIS = "99591"
 ICD9_SEVERE_SEPSIS = "99592"
 ICD9_SEPTIC_SHOCK = "78552"
 
-PATH_MIMICIII_SEPSIS = '/home/madhumita/sepsis_mimiciii_discharge/'
+PATH_MIMICIII_SEPSIS = ''
 PATH_MIMICIII_SEPSIS_TEXT = join(PATH_MIMICIII_SEPSIS, 'text')
 PATH_MIMICIII_SEPSIS_LABELS = join(PATH_MIMICIII_SEPSIS, 'labels')
 FNAME_LABELS = 'sepsis_labels.json'
@@ -96,14 +94,6 @@ class SepsisMIMIC:
         print("Number of septic notes after selecting last note per admission: ",
               note_subset[note_subset['SEPTIC'] == "septic"].shape[0])
 
-        # septic_hadm_ids = list(note_subset[note_subset['SEPTIC'] == "septic"]['HADM_ID'])
-        # n_mention_sepsis = 0
-        # for cur_hadm_id in septic_hadm_ids:
-        #     if 'sepsis' in note_subset[note_subset['HADM_ID'] == cur_hadm_id]['TEXT'].item():
-        #         n_mention_sepsis += 1
-        #         # print(note_subset[note_subset['HADM_ID'] == hadm_id]['TEXT'].item())
-        # print("Number of septic cases that mention sepsis: ", n_mention_sepsis)
-
         print("Serializing data")
         label_dict = {}  # {"HADM_ID":"septic"|"non-septic"}
         for cur_hadm_id in note_subset['HADM_ID'].tolist():
@@ -126,5 +116,21 @@ class PandasUtils:
 
 
 if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument("--mimic_dir", dest='mimic_dir',
+                        help="Path containing the MIMIC-III notes zipped files.",
+                        required=True)
+
+    parser.add_argument("--sepsis_out_dir", dest='sepsis_out_dir',
+                        help="Path to write sepsis notes and labels to.",
+                        required=True)
+
+    args = parser.parse_args()
+
+    PATH_MIMICIII = args.mimic_dir
+    PATH_MIMICIII_SEPSIS = args.sepsis_out_dir
+
     sepsis_obj = SepsisMIMIC()
     sepsis_obj.get_septic([ICD9_SEPSIS, ICD9_SEVERE_SEPSIS, ICD9_SEPTIC_SHOCK])

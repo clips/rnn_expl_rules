@@ -1,6 +1,3 @@
-import sys
-sys.path.append('/home/madhumita/PycharmProjects/rnn_expl_rules/')
-
 from src.main import SUPPORTED_DATASETS, dataset_class_dict
 from src.explanations.anchor_text import get_anchor_exps
 

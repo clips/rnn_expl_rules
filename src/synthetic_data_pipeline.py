@@ -1,6 +1,3 @@
-import sys
-sys.path.append('/home/madhumita/PycharmProjects/rnn_expl_rules/')
-
 from src.corpus_utils import ClampedCSVCorpus, CorpusEncoder, dummy_processor
 from src.classifiers.lstm import LSTMClassifier
 from src.classifiers.gru import GRUClassifier

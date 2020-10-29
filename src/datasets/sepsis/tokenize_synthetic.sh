@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 
-dir_in=/home/madhumita/sepsis_synthetic/text/
-dir_out=/home/madhumita/sepsis_synthetic/tokenized/
+while getopts i:o: flag
+do
+    case "${flag}" in
+        i) dir_in=${OPTARG};;
+        o) dir_out=${OPTARG};;
+    esac
+done
 
 test -d $dir_out || mkdir $dir_out
 

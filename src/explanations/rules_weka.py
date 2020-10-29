@@ -339,19 +339,6 @@ def induce_explanations(classifier, opt_metric,
         stop_jvm()
 
 
-# def get_stats(classifier, out_fname, dir_out):
-#     start_jvm()
-#
-#     try:
-#         model = load_model(out_fname, dir_out)
-#         get_rule_complexity(model, classifier)
-#
-#     except Exception as e:
-#         print(e)
-#     finally:
-#         stop_jvm()
-
-
 if __name__ == '__main__':
     classifier = 'part'
     optimize = 'macro-f-score'

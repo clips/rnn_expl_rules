@@ -1,15 +1,13 @@
-import sys
-sys.path.append('/home/madhumita/PycharmProjects/rnn_expl_rules/')
-
 from src.utils import FileUtils
 
+import argparse
 import pandas as pd
 import numpy as np
 
 from os.path import realpath, join
 import statistics
 
-PATH_MIMICIII = '/home/corpora/accumulate/mimiciii/'
+PATH_MIMICIII = ''
 FNAME_DIAGNOSES = 'DIAGNOSES_ICD.csv.gz'
 FNAME_NOTES = 'NOTEEVENTS.csv.gz'
 
@@ -18,7 +16,7 @@ ICD9_SEPSIS = "99591"
 ICD9_SEVERE_SEPSIS = "99592"
 ICD9_SEPTIC_SHOCK = "78552"
 
-PATH_MIMICIII_SEPSIS = '/home/madhumita/sepsis_mimiciii/'
+PATH_MIMICIII_SEPSIS = ''
 PATH_MIMICIII_SEPSIS_TEXT = join(PATH_MIMICIII_SEPSIS, 'text')
 PATH_MIMICIII_SEPSIS_LABELS = join(PATH_MIMICIII_SEPSIS, 'labels')
 FNAME_LABELS = 'sepsis_labels.json'
@@ -139,5 +137,20 @@ class PandasUtils:
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument("--mimic_dir", dest='mimic_dir',
+                        help="Path containing the MIMIC-III notes zipped files.",
+                        required=True)
+
+    parser.add_argument("--sepsis_out_dir", dest='sepsis_out_dir',
+                        help="Path to write sepsis notes and labels to.",
+                        required=True)
+
+    args = parser.parse_args()
+
+    PATH_MIMICIII = args.mimic_dir
+    PATH_MIMICIII_SEPSIS = args.sepsis_out_dir
+
     sepsis_obj = SepsisMIMIC()
     sepsis_obj.get_septic([ICD9_SEPSIS, ICD9_SEVERE_SEPSIS, ICD9_SEPTIC_SHOCK])

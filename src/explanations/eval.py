@@ -1,6 +1,5 @@
 import numpy as np
-# import os
-#
+
 from src.clamp.clamp_proc import Clamp
 
 SEPSIS_GOLD = {
@@ -13,42 +12,8 @@ SEPSIS_GOLD = {
         'hyperglycemia',
     }
 
-# NEG_CUES = set()
-# def populate_neg_cues(dir_clamp, dir_text):
-#     clamp_obj = Clamp(dir_clamp)
-#     for fname in os.listdir(dir_clamp): #os.listdir makes it slow. Can be optimized if the function is used
-#         rels = clamp_obj.get_relations_neg(fname, dir_text)
-#         for cur_rel in rels:
-#             #check if the mention contains any of the keywords
-#             if any(i in cur_rel.entity1.mention.lower() for i in SEPSIS_GOLD):
-#                 NEG_CUES.add(cur_rel.entity2.mention)
-#
-#     print("Negation cues populated; Number of unique cue phrases:", len(NEG_CUES))
-#
-# def update_gold():
-#     phrase_to_tokens(SEPSIS_GOLD)
-#     phrase_to_tokens(NEG_CUES)
-#
-# def phrase_to_tokens(phrase_set):
-#     for term in list(phrase_set):
-#         phrase_set.remove(term) #inplace update
-#         phrase_set.update(term.split()) #inplace update
-
 
 class InterpretabilityEval:
-
-    # def __init__(self, dir_clamp, dir_text, use_neg = True):
-    #
-    #     if use_neg:
-    #         populate_neg_cues(dir_clamp, dir_text)
-    #
-    #     if not use_neg:
-    #         assert len(NEG_CUES) == 0, "Negation cues are already populated, and hence are wrongly added to gold"
-    #
-    #     update_gold() #convert important phrases to tokens
-    #     # set of important features to be treated as gold
-    #     self.gold = SEPSIS_GOLD.union(NEG_CUES)
-    #     print("Total length of gold standard set of important words", len(self.gold))
 
     def __init__(self, corpus, use_neg=True, keywords=SEPSIS_GOLD):
         # populating the list of gold important keywords for the instance
@@ -64,8 +29,6 @@ class InterpretabilityEval:
         :param debug: True to display messages for debugging
         :return: Average precision@k, recall@k and F-score@k
         """
-        # avg_prec = 0.
-        # avg_recall = 0.
         avg_acc = 0.
         n_inst = 0
 
@@ -93,25 +56,12 @@ class InterpretabilityEval:
             # compute accuracy: same as fscore because k = len(gold)
             cur_acc = len(overlap) / len(top_k)  # how many of the top features are important as per gold.
 
-            # # compute precision at k
-            # cur_prec = len(overlap) / len(top_k) #how many of the top features are important as per gold.
-            # #compute recall at k
-            # cur_recall = len(overlap) / len(gold) #how many of the important features in gold are found as top feats
-
-            # avg_prec += cur_prec
-            # avg_recall += cur_recall
             avg_acc += cur_acc
 
         if debug: print("Computed scores for {} instances".format(n_inst))
 
         avg_acc /= n_inst
         avg_acc *= 100
-        # avg_prec /= n_inst
-        # avg_recall /= n_inst
-
-        # macro_f1 = (2*avg_prec*avg_recall) / (avg_prec+avg_recall)
-
-        # print("Average precision: {}, Average recall: {}, Macro-F1: {}".format(avg_prec, avg_recall, macro_f1))
         print("Average accuracy:", avg_acc)
 
         # return avg_prec, avg_recall, macro_f1

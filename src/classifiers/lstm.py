@@ -133,24 +133,3 @@ class LSTMClassifier(RNNClassifier):
     @hidden_in.setter
     def hidden_in(self, val):
         self._hidden_in = val
-
-
-if __name__ == '__main__':
-    lstm = LSTMClassifier(False, 2, 100, 50, 50, 0.5, 2, 2)
-
-    # variable length sequences
-    X0 = torch.LongTensor([1, 5, 8, 19, 43])
-    X1 = torch.LongTensor([23,44,5,13,1,34,43])
-    X = [X1, X0] # sequence needs to be sorted in descending order of length
-
-    X_padded = nn.utils.rnn.pad_sequence(X, batch_first=True)
-    # print(X_padded)
-
-    # @todo: create lengths here
-
-    fwd_out = lstm.forward(X_padded, [7,5], lengths, lstm.hidden_in)
-
-    labels = torch.LongTensor([[1,0],[0,1]])
-
-    loss = lstm.loss(fwd_out, labels)
-    print(loss)

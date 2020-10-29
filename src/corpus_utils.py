@@ -6,8 +6,6 @@ import pandas as pd
 import torch
 from os.path import realpath, join
 import json
-# import numpy as np
-# from random import shuffle
 
 # beginning of seq, end of seq, beg of line, end of line, unknown, padding symbol
 BOS, EOS, BOL, EOL, UNK, PAD = '<s>', '</s>', '<bol>', '</bol>', '<unk>', '<pad>'
@@ -105,41 +103,6 @@ class DictLabelEncoder:
         transformed_labels = [self.idx2label[label] for label in labels]
         return transformed_labels
 
-
-# class SepsisMimicCorpus:
-#     def __init__(self, dir_corpus, f_labels, dir_labels, fname_subset, subset_name,
-#                  text_processor=dummy_processor, label_encoder=sklearn_label_encoder,
-#                  resample=False):
-#         self.dir_in = dir_corpus
-#         self.subset_ids = fname_subset  # file names for the current split of the corpus
-#         self.subset_name = subset_name
-#
-#         all_labels = FileUtils.read_json(f_labels, dir_labels)
-#         self.labels = [all_labels[i] for i in self.subset_ids]
-#         self.labels, self.label_encoder = label_encoder(list(all_labels.values()),
-#                                                         self.labels)
-#
-#         if resample:
-#             self.subset_ids = DataUtils.downsample(self.subset_ids,
-#                                                    self.labels)
-#             resampled_labels = [all_labels[i] for i in self.subset_ids]
-#             self.labels = self.label_encoder.transform(resampled_labels)
-#
-#         self.text_processor = text_processor
-#
-#     def __iter__(self):
-#
-#         for cur_fname, cur_label in zip(self.subset_ids, self.labels):
-#             with open(realpath(join(self.dir_in, cur_fname + '.txt'))) as f:
-#                 word_seq = list()
-#                 for line in f:
-#                     word_seq.extend(self.text_processor(line))
-#                 yield (word_seq, cur_label)
-#
-#     def get_class_distribution(self):
-#         for cur_label in set(self.labels):
-#             print("Percentage of instances for class{}: {}".
-#                   format(cur_label, sum(self.labels==cur_label)/len(self.labels)*100))
 
 class TorchNLPCorpus:
     def __init__(self, torchnlp_dataset, subset_name, all_labels,
@@ -370,46 +333,6 @@ class CorpusEncoder:
 
 
 class DataUtils:
-
-    # @staticmethod
-    # def downsample(idx, labels):
-    #     """
-    #     Downsamples the instances of all classes to the length of the minority class
-    #     :param idx: list of filename indices for all instances
-    #     :param labels: list of class labels for all instances, mapping idx
-    #     :return: new list of filename indices with all classes downsampled to minority class
-    #     """
-    #
-    #     print("Original length: ", len(idx))
-    #
-    #     inst_idx = dict()  # Indicies of each class' observations
-    #     n_insts = dict()  # Number of observations in each class
-    #
-    #     for cur_class in set(labels):
-    #         inst_idx[cur_class] = [idx[i] for i in np.where(labels == cur_class)[0]]
-    #         n_insts[cur_class] = len(inst_idx[cur_class])
-    #
-    #     # find class with min samples
-    #     min_class = min(n_insts, key=n_insts.get)
-    #     print("Retaining {} samples of each class".format(n_insts[min_class]))
-    #
-    #     new_idx = list()
-    #     # For every observation of min len class,
-    #     # randomly sample from other classes without replacement
-    #     for cur_class in inst_idx.keys():
-    #         downsampled = np.random.choice(inst_idx[cur_class],
-    #                                        size=n_insts[min_class],
-    #                                        replace=False)
-    #         new_idx.extend(downsampled)
-    #
-    #     # Shuffle sampled indices
-    #     shuffle(new_idx)
-    #
-    #     # print("New file subsets: ", new_idx)
-    #     print("New length: ", len(new_idx))
-    #
-    #     return new_idx
-
     @staticmethod
     def get_class_distribution(labels):
         for cur_label in set(labels):

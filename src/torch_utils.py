@@ -152,27 +152,6 @@ class CustomEmbedding(nn.Module):
 
         return result
 
-    # def product_for_embedding(self, input):
-    #     # The requires_grad parameter of result will mimic requires_grad parameter of self
-    #     self.last_oh = self.to_one_hot(input)
-    #
-    #     with torch.set_grad_enabled(self.requires_grad):
-    #         result = torch.stack(
-    #             [torch.mm(batch.float(), self.weight.cpu()) for batch in self.last_oh], dim=0)
-    #     return result
-    #
-    # def to_one_hot(self, input):
-    #     # Returns a new tensor that doesn't share memory
-    #
-    #     ones = torch.eye(self.num_embeddings, requires_grad=False)
-    #     result = torch.index_select(
-    #         ones, 0, input.cpu().view(-1).long()).view(
-    #         input.size() + (self.num_embeddings,))
-    #
-    #     result.requires_grad = self.requires_grad
-    #
-    #     return result
-
     def __repr__(self):
         # return self.__class__.__name__ + "({})".format(self.num_embeddings)
         s = '{num_embeddings}, {embedding_dim}'

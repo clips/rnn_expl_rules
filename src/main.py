@@ -1,12 +1,9 @@
-import sys
-sys.path.append('/home/madhumita/PycharmProjects/rnn_expl_rules/')
-
 from src.corpus_utils import spacy_eng_tokenizer, dummy_processor
-from src.utils import FileUtils
 from src.train_classifiers import process_model
 from src.get_explanation_files import get_explanation_files
 
 from os.path import realpath
+import argparse
 import resource
 soft, hard = 5.4e+10, 5.4e+10  # nearly 50GB
 resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
@@ -37,40 +34,6 @@ class SepsisMIMIC:
     bidir = True
 
     test_mode = 'test'  # val | test
-
-
-class Newsgroups:
-    PATH_DIR_CORPUS = realpath('../dataset/newsgroups/')
-    print(PATH_DIR_CORPUS)
-    FNAME_TRAIN = 'train_newsgroups.csv'
-    FNAME_VAL = 'val_newsgroups.csv'
-    FNAME_TEST = 'test_newsgroups.csv'
-    FNAME_LABELDICT = 'newsgroups_labeldict.json'
-    PATH_DIR_OUT = realpath('../out/')
-
-    TOKENIZER = spacy_eng_tokenizer
-    LABEL_DICT = FileUtils.read_json(FNAME_LABELDICT, PATH_DIR_CORPUS)
-
-    PRETRAINED_EMBS = True
-    PATH_DIR_EMBS = '/home/corpora/word_embeddings/'
-    FNAME_EMBS = 'glove.840B.300d.txt'
-    N_DIM_EMBS = 300
-    embs_from_disk = True
-    FNAME_EMBS_WT = 'pretrained_embs_newsgroups.npy'
-
-    load_encoder = True
-    FNAME_ENCODER = 'corpus_encoder_newsgroups.json'
-    PATH_ENCODER = realpath('../out/')
-
-    train_model = True
-    model_name = 'lstm'
-    n_layers = 3
-    n_hid = 600
-    n_emb = N_DIM_EMBS
-    dropout = 0.3
-    bidir = True
-
-    test_mode = 'val'  # val | test
 
 
 class SST2:
@@ -106,9 +69,8 @@ class SST2:
 
 
 SUPPORTED_DATASETS = ('sepsis-mimic', 'sepsis-mimic-discharge',
-                      'newsgroups', 'sst2')
+                      'sst2')
 dataset_class_dict = {'sepsis-mimic': SepsisMIMIC,
-                      'newsgroups': Newsgroups,
                       'sst2': SST2
                       }
 
@@ -127,8 +89,26 @@ def main(dataset, get_expl, get_baseline_expl):
 
 
 if __name__ == '__main__':
-    # newsgroups | sst2 | sepsis-mimic | sepsis-mimic-discharge
-    ds = 'sepsis-mimic'
-    get_expl = True
-    get_baseline_expl = False
-    main(ds, get_expl, get_baseline_expl)
+    # sst2 | sepsis-mimic | sepsis-mimic-discharge
+
+    # command line arguments
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument("--dataset", dest='dataset', choices=['sst2', 'sepsis-mimic', 'sepsis-mimic-discharge'],
+                        help="Name of the dataset to use.",
+                        required=True)
+
+    parser.add_argument("--get_explanations", action='store_true',
+                        help="Use this option to obtain explanation rules.",
+                        required=True)
+
+    parser.add_argument("--get_baseline_explanations", action='store_true',
+                        help="Use this option to obtain baseline explanation rules.",
+                        required=False)
+
+    args = parser.parse_args()
+
+    dataset = args.dataset
+    get_expl = args.get_explanations
+    get_baseline_expl = args.get_baseline_explanations
+    main(dataset, get_expl, get_baseline_expl)

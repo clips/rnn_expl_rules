@@ -107,13 +107,3 @@ class Clamp:
             rels.append(cur_rel)
 
         return rels
-
-
-if __name__ == '__main__':
-    clamp_obj = Clamp()
-
-    entities = clamp_obj.get_entities(f_clamp='1.txt',
-                                      dir_clamp='/home/madhumita/dataset/sepsis_synthetic/clamp')
-    rels = clamp_obj.get_relations_neg(fname='1.txt',
-                                       dir_clamp='/home/madhumita/dataset/sepsis_synthetic/clamp',
-                                       dir_text='/home/madhumita/dataset/sepsis_synthetic/text')
